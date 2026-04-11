@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { MonitorCard } from "./components/monitor-card";
 import { MonitorCardSkeleton } from "./components/monitor-card-skeleton";
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
+import { Button } from "./components/ui/button";
 import type { MonitorInfo, MonitorListResult, AppConfig } from "./types/monitor";
 
 function App() {
@@ -104,7 +105,18 @@ function App() {
               <line x1="12" x2="12.01" y1="16" y2="16" />
             </svg>
             <AlertTitle>检测异常</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription className="flex items-start justify-between gap-3">
+              <span>{error}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 h-7 text-xs border-destructive/30 hover:bg-destructive/10"
+                onClick={refreshMonitors}
+                disabled={loading}
+              >
+                重新检测
+              </Button>
+            </AlertDescription>
           </Alert>
         )}
 
@@ -145,6 +157,15 @@ function App() {
                   </li>
                 </ul>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 text-xs"
+                onClick={refreshMonitors}
+                disabled={loading}
+              >
+                重新检测
+              </Button>
             </div>
           </div>
         )}
