@@ -5,10 +5,8 @@ mod tray;
 use config::{AppConfig, ConfigManager};
 use monitor::{get_monitors, switch_input, MonitorInfo};
 use serde::Serialize;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tauri::Manager;
-
-static DDC_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Serialize)]
 struct MonitorListResult {
@@ -36,9 +34,7 @@ fn cmd_switch_input(
     monitor_index: usize,
     input_value: u8,
 ) -> Result<String, String> {
-    let _guard = DDC_LOCK.lock().map_err(|_| "DDC 操作正忙，请稍后重试".to_string())?;
     let result = switch_input(monitor_index, input_value);
-    drop(_guard);
     tray::refresh_tray(&app);
     result
 }
@@ -53,21 +49,25 @@ fn cmd_save_config(
     state: tauri::State<'_, Arc<ConfigManager>>,
     config: AppConfig,
 ) -> Result<(), String> {
-    let result = state.save(config);
-    if result.is_ok() {
+    state.save(config).map_err(|e| {
+        log::error!("配置保存失败: {}", e);
+        e
+    }).map(|_| {
         log::debug!("配置已保存");
-    }
-    result
+    })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
+                if let Err(e) = window.show() {
+                    log::warn!("单实例回调: 显示窗口失败: {}", e);
+                }
+                if let Err(e) = window.set_focus() {
+                    log::warn!("单实例回调: 聚焦窗口失败: {}", e);
+                }
             }
         }))
         .setup(|app| {
@@ -108,5 +108,8 @@ pub fn run() {
             cmd_save_config,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .unwrap_or_else(|e| {
+            eprintln!("MonitorPilot 启动失败: {}", e);
+            std::process::exit(1);
+        });
 }

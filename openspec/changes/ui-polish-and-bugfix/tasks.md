@@ -138,3 +138,20 @@
 - [x] 18.11 monitor-card.tsx: 编辑按钮从 `hidden` 改为 `opacity` 方案，保持 Tab 可聚焦
 - [x] 18.12 monitor-card.tsx: 长名称添加 `truncate` + `title` 属性防止溢出
 - [x] 18.13 tray.rs: 帮助子菜单 About 添加 "by Larry Gao" 作者信息
+
+## 19. 托盘菜单扁平化
+
+- [x] 19.1 去除"帮助"子菜单，"访问项目主页"/"反馈问题"提到主菜单
+- [x] 19.2 顶部标题合并为 "MonitorPilot vX.X.X — Larry Gao"，正常颜色显示
+- [x] 19.3 去除版本号和作者信息的重复项
+
+## 20. 代码审查修复（5 轮深度审查）
+
+- [x] 20.1 DDC_LOCK 下沉到 monitor.rs switch_input 内部，保护所有调用路径（含托盘）
+- [x] 20.2 移除未使用的 tauri-plugin-shell 依赖和 shell:default 权限
+- [x] 20.3 lib.rs .expect() 改为 unwrap_or_else 安全退出
+- [x] 20.4 所有 `let _ =` 静默丢弃改为 log::warn 记录
+- [x] 20.5 cmd_save_config 失败时记录 log::error
+- [x] 20.6 Cargo.toml repository 填充实际仓库 URL
+- [x] 20.7 Cargo.toml authors 统一为 "Larry Gao"
+- [x] 20.8 OpenSpec spec 文档同步：托盘扁平化、DDC_LOCK 下沉、作者位置

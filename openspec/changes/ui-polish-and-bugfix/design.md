@@ -108,11 +108,11 @@ MonitorPilot v0.1.0 已完成核心功能（显示器检测、输入切换、系
 
 ### 10. 后端 DDC 操作互斥锁
 
-**选择**：在 `lib.rs` 中使用 `static DDC_LOCK: Mutex<()>` 确保后端所有 DDC 操作串行化
+**选择**：在 `monitor.rs` 中使用 `static DDC_LOCK: Mutex<()>`，在 `switch_input()` 函数内部获取锁
 
 **理由**：
-- 前端 `useRef` 互斥锁只保护前端操作，托盘菜单切换不受约束
-- 后端互斥锁作为最终保障层，防止任何来源的并发 DDC 操作
+- 锁在模块入口函数内部获取，确保所有调用方（前端 IPC、托盘菜单）自动受保护
+- 无需调用方记住加锁，消除了遗漏风险（之前锁在 `lib.rs` 中，托盘路径绕过了锁）
 - `Mutex` 轻量且语义清晰
 
 ### 11. MonitorCard 性能优化：React.memo + useCallback

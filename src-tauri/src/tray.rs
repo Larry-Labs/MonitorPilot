@@ -130,8 +130,12 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
         }
         "settings" => {
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
+                if let Err(e) = window.show() {
+                    log::warn!("托盘: 显示窗口失败: {}", e);
+                }
+                if let Err(e) = window.set_focus() {
+                    log::warn!("托盘: 聚焦窗口失败: {}", e);
+                }
             }
         }
         "refresh" => {
@@ -177,7 +181,9 @@ pub fn refresh_tray(app: &AppHandle) {
     match build_tray_menu(app) {
         Ok(menu) => {
             if let Some(tray) = app.tray_by_id("main") {
-                let _ = tray.set_menu(Some(menu));
+                if let Err(e) = tray.set_menu(Some(menu)) {
+                    log::warn!("refresh_tray: 设置菜单失败: {}", e);
+                }
             } else {
                 log::warn!("refresh_tray: 未找到 id 为 main 的托盘实例");
             }

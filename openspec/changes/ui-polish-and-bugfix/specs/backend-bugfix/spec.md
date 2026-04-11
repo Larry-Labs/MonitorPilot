@@ -72,15 +72,15 @@ The system SHALL bundle the m1ddc binary as a Tauri sidecar for macOS.
 - **THEN** the system SHALL first look for m1ddc next to the executable (sidecar), falling back to system PATH
 
 ### Requirement: Tray menu formalization
-The system SHALL present a professional tray menu without emoji.
+The system SHALL present a professional, flat tray menu without emoji.
 
 #### Scenario: Menu structure
 - **WHEN** the user right-clicks the tray icon
-- **THEN** the menu SHALL show: version title (disabled) → separator → monitor submenus → separator → refresh + open main window → separator → help submenu → separator → quit
+- **THEN** the menu SHALL show: title with version and author → separator → monitor submenus → separator → refresh + open main window → separator → visit homepage + report issue → separator → quit
 
-#### Scenario: Help submenu
-- **WHEN** the user opens the help submenu
-- **THEN** it SHALL contain: about (disabled), separator, visit homepage (opens browser), report issue (opens browser)
+#### Scenario: Title display
+- **WHEN** the tray menu is displayed
+- **THEN** the title SHALL show "MonitorPilot vX.X.X — Larry Gao" in normal (non-grey) text color
 
 ### Requirement: Release build logging
 The system SHALL enable logging in release builds at Info level.
@@ -131,11 +131,12 @@ The system SHALL log all DDC/CI operations for debugging.
 - **THEN** the system SHALL log: switch request (from/to), command result, verification result, rollback attempts if any
 
 ### Requirement: Backend DDC operation mutex
-The system SHALL serialize all DDC/CI operations at the backend level.
+The system SHALL serialize all DDC/CI switch operations at the monitor module level.
 
 #### Scenario: Concurrent switch from frontend and tray
-- **WHEN** a switch command is invoked while another is in progress (from any source: frontend, tray)
+- **WHEN** a switch command is invoked while another is in progress (from any source: frontend IPC, tray menu)
 - **THEN** the second command SHALL block until the first completes, preventing DDC bus conflicts
+- **AND** the lock SHALL be acquired inside `switch_input()` itself, ensuring all callers are protected
 
 ### Requirement: Content Security Policy
 The system SHALL enforce a strict CSP in `tauri.conf.json`.
@@ -159,8 +160,8 @@ The system SHALL cache the resolved m1ddc binary path using `OnceLock`.
 - **THEN** the path SHALL be resolved only once and cached for subsequent calls
 
 ### Requirement: Tray author information
-The system SHALL display author information in the tray help submenu.
+The system SHALL display author information in the tray menu title.
 
-#### Scenario: About item content
-- **WHEN** the user views the "关于 MonitorPilot" item in the tray help submenu
-- **THEN** it SHALL display version information and "by Larry Gao" as the author
+#### Scenario: Author display
+- **WHEN** the user opens the tray menu
+- **THEN** the title line SHALL include "Larry Gao" as the author alongside the version

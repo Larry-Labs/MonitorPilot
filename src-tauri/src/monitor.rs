@@ -1,6 +1,8 @@
 use serde::Serialize;
 use std::process::Command;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
+
+static DDC_LOCK: Mutex<()> = Mutex::new(());
 
 #[cfg(not(target_os = "macos"))]
 const VCP_INPUT_SOURCE: u8 = 0x60;
@@ -204,6 +206,10 @@ fn macos_get_input(display_num: u32) -> Option<u8> {
 
 #[cfg(target_os = "macos")]
 pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, String> {
+    let _guard = DDC_LOCK
+        .lock()
+        .map_err(|_| "DDC 操作正忙，请稍后重试".to_string())?;
+
     let m1ddc = find_m1ddc();
     let display_num = monitor_index as u32;
 
@@ -368,6 +374,10 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
 #[cfg(not(target_os = "macos"))]
 pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, String> {
     use ddc_hi::{Ddc, Display};
+
+    let _guard = DDC_LOCK
+        .lock()
+        .map_err(|_| "DDC 操作正忙，请稍后重试".to_string())?;
 
     log::info!(
         "切换请求: 显示器 #{} → {}",

@@ -52,7 +52,7 @@ npm run tauri build
 | 平台 | 格式 |
 |------|------|
 | macOS | `.dmg` |
-| Windows | `.exe`（绿色免安装） |
+| Windows | `.exe`（NSIS 安装包） |
 | Linux | `.AppImage` |
 
 ## 许可证

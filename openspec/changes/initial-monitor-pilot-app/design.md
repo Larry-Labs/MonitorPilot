@@ -37,7 +37,7 @@
 
 **理由**：
 - Tauri 2 打包后仅 5-15MB，资源占用极低
-- Rust 后端原生调用 DDC/CI 库，无需 FFI 或子进程调用 CLI 工具
+- Rust 后端可原生调用 DDC/CI 库（Linux/Windows），macOS 通过 bundled m1ddc sidecar 调用
 - Web 前端（React + TypeScript）开发效率高，UI 设计灵活
 - Tauri 2 内置 system tray 和单实例插件支持
 - 一套代码编译三平台
@@ -60,7 +60,7 @@
 
 ### 3. 前端技术：React + shadcn/ui
 
-**选择**：React 18 + TypeScript + Tailwind CSS + shadcn/ui
+**选择**：React + TypeScript + Tailwind CSS + shadcn/ui
 
 **备选方案**：
 - Svelte 5 + Skeleton UI：极致轻量但生态较小
@@ -137,12 +137,12 @@
 | 平台 | 格式 | 说明 |
 |------|------|------|
 | **macOS** | `.dmg` 磁盘镜像 | 标准 macOS 分发格式，双击打开拖入 Applications |
-| **Windows** | `.exe` 绿色免安装版 | 单文件可执行，解压即用，无需安装器 |
+| **Windows** | `.exe` NSIS 安装包 | 轻量安装程序，支持 per-user 安装，无需管理员权限 |
 | **Linux** | `.AppImage` | 通用格式，免安装，双击直接运行，兼容所有主流发行版 |
 
 **理由**：
 - macOS 用户习惯 .dmg 安装流程
-- Windows 绿色版零门槛，无需管理员权限，便于企业环境分发
+- Windows NSIS 安装包轻量，支持 per-user 安装，无需管理员权限
 - AppImage 是 Linux 最通用的免安装格式，不依赖特定包管理器
 - Tauri 2 内置支持以上所有格式的打包
 
