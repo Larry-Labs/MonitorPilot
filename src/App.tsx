@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { MonitorCard } from "./components/monitor-card";
-import { Button } from "./components/ui/button";
 import { TooltipProvider } from "./components/ui/tooltip";
 
 interface InputSource {
@@ -67,19 +66,9 @@ function App() {
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-background text-foreground">
-        <header className="border-b border-border px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">MonitorPilot</h1>
-            <p className="text-sm text-muted-foreground">显示器输入源切换</p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={refreshMonitors}
-            disabled={loading}
-          >
-            {loading ? "检测中..." : "刷新"}
-          </Button>
+        <header className="border-b border-border px-6 py-4">
+          <h1 className="text-xl font-semibold tracking-tight">MonitorPilot</h1>
+          <p className="text-sm text-muted-foreground">显示器输入源切换</p>
         </header>
 
         <main className="p-6 space-y-4">

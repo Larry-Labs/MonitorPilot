@@ -42,21 +42,21 @@
 - Tauri 2 内置 system tray 和全局快捷键支持
 - 一套代码编译三平台
 
-### 2. DDC/CI 通信层：ddc-hi crate
+### 2. DDC/CI 通信层：平台差异化方案
 
-**选择**：使用 Rust `ddc-hi` crate 作为 DDC/CI 通信层
+**选择**：macOS 使用 `m1ddc` CLI，Linux/Windows 使用 `ddc-hi` crate
 
-**备选方案**：
-- 调用平台 CLI 工具（m1ddc/ddcutil/ControlMyMonitor）：简单但增加外部依赖
-- 直接使用平台原生 API：控制力强但需维护三套代码
+**背景**：`ddc-hi` 的 macOS 后端 (`ddc-macos`) 使用 `IODisplayConnect` 接口，但此接口在 Apple Silicon Mac 上不可用。`m1ddc` 使用 Apple 未公开的 `IOAVService` API，是目前 macOS（尤其是 Apple Silicon）上最可靠的 DDC/CI 工具。
+
+**方案**：
+- macOS：通过 `std::process::Command` 调用 `m1ddc` CLI（条件编译 `#[cfg(target_os = "macos")]`）
+- Linux：`ddc-hi` → i2c-dev
+- Windows：`ddc-hi` → Win32 Monitor Configuration API
 
 **理由**：
-- `ddc-hi` 是统一的跨平台抽象层，底层自动选择平台 API
-  - macOS：I/O Kit（IODisplayConnect）
-  - Linux：i2c-dev
-  - Windows：Win32 Monitor Configuration API
-- 无需外部 CLI 工具，零外部依赖
-- Rust 原生集成，无 FFI 开销
+- 在 Apple Silicon Mac 上经实际验证可用
+- Linux/Windows 仍保持零外部依赖
+- 条件编译隔离平台差异，代码清晰
 
 ### 3. 前端技术：React + shadcn/ui
 
