@@ -35,14 +35,29 @@ fn input_name(value: u8) -> String {
     }
 }
 
-fn default_supported_inputs() -> Vec<InputSource> {
-    vec![0x0F, 0x10, 0x11, 0x12]
-        .into_iter()
-        .map(|v| InputSource {
+fn supported_inputs_with_current(current: Option<u8>) -> Vec<InputSource> {
+    let defaults: Vec<u8> = vec![0x0F, 0x10, 0x11, 0x12];
+    let mut inputs: Vec<InputSource> = defaults
+        .iter()
+        .map(|&v| InputSource {
             value: v,
             name: input_name(v),
         })
-        .collect()
+        .collect();
+
+    if let Some(cur) = current {
+        if !defaults.contains(&cur) {
+            inputs.insert(
+                0,
+                InputSource {
+                    value: cur,
+                    name: input_name(cur),
+                },
+            );
+        }
+    }
+
+    inputs
 }
 
 // --- macOS: use m1ddc CLI ---
@@ -97,7 +112,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
             current_input_name: current_input
                 .map(|v| input_name(v))
                 .unwrap_or_else(|| "未知".to_string()),
-            supported_inputs: default_supported_inputs(),
+            supported_inputs: supported_inputs_with_current(current_input),
         });
     }
 
@@ -225,7 +240,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
             model,
             current_input,
             current_input_name,
-            supported_inputs: default_supported_inputs(),
+            supported_inputs: supported_inputs_with_current(current_input),
         });
     }
 
