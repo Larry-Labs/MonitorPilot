@@ -1,0 +1,219 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, it, expect, vi } from "vitest";
+import { MonitorCard } from "../monitor-card";
+import type { MonitorInfo } from "../../types/monitor";
+
+const mockMonitor: MonitorInfo = {
+  index: 1,
+  model: "LG ULTRAGEAR",
+  current_input: 0x0f,
+  current_input_name: "DP-1",
+  supported_inputs: [
+    { value: 0x0f, name: "DP-1" },
+    { value: 0x10, name: "DP-2" },
+    { value: 0x11, name: "HDMI-1" },
+    { value: 0x12, name: "HDMI-2" },
+  ],
+};
+
+describe("MonitorCard", () => {
+  it("renders monitor model and index", () => {
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={null}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("LG ULTRAGEAR")).toBeInTheDocument();
+    expect(screen.getByText("#1")).toBeInTheDocument();
+  });
+
+  it("renders all input source buttons", () => {
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={null}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("DP-2")).toBeInTheDocument();
+    expect(screen.getByText("HDMI-1")).toBeInTheDocument();
+    expect(screen.getByText("HDMI-2")).toBeInTheDocument();
+  });
+
+  it("marks active input with '当前' label", () => {
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={null}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("当前")).toBeInTheDocument();
+  });
+
+  it("shows active input in badge", () => {
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={null}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    const badges = screen.getAllByText("DP-1");
+    expect(badges.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("calls onSwitch when clicking inactive input", async () => {
+    const onSwitch = vi.fn();
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={null}
+        customNames={{}}
+        onSwitch={onSwitch}
+        onRename={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByText("HDMI-1"));
+    expect(onSwitch).toHaveBeenCalledWith(1, 0x11);
+  });
+
+  it("does NOT call onSwitch when clicking active input", async () => {
+    const onSwitch = vi.fn();
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={null}
+        customNames={{}}
+        onSwitch={onSwitch}
+        onRename={vi.fn()}
+      />,
+    );
+    const activeButton = screen.getByRole("button", { pressed: true });
+    await userEvent.click(activeButton);
+    expect(onSwitch).not.toHaveBeenCalled();
+  });
+
+  it("uses custom names when provided", () => {
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={null}
+        customNames={{ "1-15": "MacBook", "1-17": "Ubuntu" }}
+        onSwitch={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    const macbookElements = screen.getAllByText("MacBook");
+    expect(macbookElements.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Ubuntu")).toBeInTheDocument();
+  });
+
+  it("shows spinner when switching", () => {
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={"1-17"}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("切换中")).toBeInTheDocument();
+  });
+
+  it("disables button when switching that input", () => {
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={"1-17"}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    const switchingButton = screen.getByText("切换中").closest("button");
+    expect(switchingButton).toBeDisabled();
+  });
+
+  it("enters edit mode on pencil button click", async () => {
+    const user = userEvent.setup();
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={null}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    const editButtons = screen.getAllByTitle("重命名");
+    await user.click(editButtons[0]);
+    expect(screen.getByPlaceholderText("DP-1")).toBeInTheDocument();
+  });
+
+  it("calls onRename when finishing edit", async () => {
+    const onRename = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={null}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={onRename}
+      />,
+    );
+    const editButtons = screen.getAllByTitle("重命名");
+    await user.click(editButtons[0]);
+    const input = screen.getByPlaceholderText("DP-1");
+    await user.clear(input);
+    await user.type(input, "MacBook{Enter}");
+    expect(onRename).toHaveBeenCalledWith("1-15", "MacBook");
+  });
+
+  it("cancels edit on Escape", async () => {
+    const onRename = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={null}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={onRename}
+      />,
+    );
+    const editButtons = screen.getAllByTitle("重命名");
+    await user.click(editButtons[0]);
+    await user.keyboard("{Escape}");
+    expect(onRename).not.toHaveBeenCalled();
+    expect(screen.queryByPlaceholderText("DP-1")).not.toBeInTheDocument();
+  });
+
+  it("has correct aria attributes on buttons", () => {
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={null}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    const activeBtn = screen.getByRole("button", { pressed: true });
+    expect(activeBtn).toHaveAttribute("aria-pressed", "true");
+    expect(activeBtn).toHaveAttribute("aria-label", "DP-1（当前输入源）");
+  });
+});

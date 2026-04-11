@@ -407,3 +407,101 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
     log::info!("切换成功: 显示器 #{} → {}", monitor_index, input_name(input_value));
     Ok(format!("已切换到 {}", input_name(input_value)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn input_name_known_values() {
+        assert_eq!(input_name(0x0F), "DP-1");
+        assert_eq!(input_name(0x10), "DP-2");
+        assert_eq!(input_name(0x11), "HDMI-1");
+        assert_eq!(input_name(0x12), "HDMI-2");
+        assert_eq!(input_name(0x01), "VGA-1");
+        assert_eq!(input_name(0x03), "DVI-1");
+        assert_eq!(input_name(0x13), "HDMI-3");
+        assert_eq!(input_name(0x14), "HDMI-4");
+    }
+
+    #[test]
+    fn input_name_unknown_value_formats_hex() {
+        assert_eq!(input_name(0x6E), "Input-0x6E");
+        assert_eq!(input_name(0xFF), "Input-0xFF");
+        assert_eq!(input_name(0x00), "Input-0x00");
+    }
+
+    #[test]
+    fn supported_inputs_default_list() {
+        let inputs = supported_inputs_with_current(None);
+        assert_eq!(inputs.len(), 4);
+        assert_eq!(inputs[0].value, 0x0F);
+        assert_eq!(inputs[0].name, "DP-1");
+        assert_eq!(inputs[1].value, 0x10);
+        assert_eq!(inputs[2].value, 0x11);
+        assert_eq!(inputs[3].value, 0x12);
+    }
+
+    #[test]
+    fn supported_inputs_with_known_current_no_duplicate() {
+        let inputs = supported_inputs_with_current(Some(0x0F));
+        assert_eq!(inputs.len(), 4);
+        assert_eq!(inputs[0].value, 0x0F);
+    }
+
+    #[test]
+    fn supported_inputs_with_unknown_current_prepends() {
+        let inputs = supported_inputs_with_current(Some(0x6E));
+        assert_eq!(inputs.len(), 5);
+        assert_eq!(inputs[0].value, 0x6E);
+        assert_eq!(inputs[0].name, "Input-0x6E");
+        assert_eq!(inputs[1].value, 0x0F);
+    }
+
+    #[cfg(target_os = "macos")]
+    mod macos_tests {
+        use super::super::*;
+
+        #[test]
+        fn parse_m1ddc_line_standard() {
+            let (num, model) = parse_m1ddc_line("[1] LG ULTRAGEAR (ABC123)");
+            assert_eq!(num, 1);
+            assert_eq!(model, "LG ULTRAGEAR");
+        }
+
+        #[test]
+        fn parse_m1ddc_line_multi_digit_index() {
+            let (num, model) = parse_m1ddc_line("[12] Dell U2723QE (UUID-123)");
+            assert_eq!(num, 12);
+            assert_eq!(model, "Dell U2723QE");
+        }
+
+        #[test]
+        fn parse_m1ddc_line_null_model_is_builtin() {
+            let (num, model) = parse_m1ddc_line("[1] (null) (37D8832A-2D66)");
+            assert_eq!(num, 1);
+            assert_eq!(model, "内置显示器");
+        }
+
+        #[test]
+        fn parse_m1ddc_line_no_bracket() {
+            let (num, model) = parse_m1ddc_line("Samsung LS27A (UUID)");
+            assert_eq!(num, 1);
+            assert_eq!(model, "Samsung LS27A");
+        }
+
+        #[test]
+        fn parse_m1ddc_line_empty_before_paren() {
+            let (num, model) = parse_m1ddc_line("[2] (UUID-ONLY)");
+            assert_eq!(num, 2);
+            assert_eq!(model, "内置显示器");
+        }
+
+        #[test]
+        fn parse_m1ddc_line_no_uuid() {
+            let (num, model) = parse_m1ddc_line("[3] Plain Model Name");
+            assert_eq!(num, 3);
+            assert_eq!(model, "Plain Model Name");
+        }
+    }
+}

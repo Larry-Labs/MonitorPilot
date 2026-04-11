@@ -7,9 +7,16 @@ const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig(async () => ({
   define: {
-    __APP_VERSION__: JSON.stringify(process.env.npm_package_version),
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? "0.0.0-test"),
   },
   plugins: [react(), tailwindcss()],
+
+  test: {
+    globals: true,
+    environment: "jsdom",
+    setupFiles: "./src/test/setup.ts",
+    css: false,
+  },
 
   resolve: {
     alias: {
