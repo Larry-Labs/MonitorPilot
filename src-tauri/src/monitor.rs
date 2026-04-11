@@ -191,9 +191,22 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
         let stdout = String::from_utf8_lossy(&output.stdout);
         let trimmed = stdout.trim();
         if trimmed.contains("Could not find") || trimmed.contains("error") {
-            Err(format!("切换失败: {}", trimmed))
+            return Err(format!("切换失败: {}", trimmed));
+        }
+
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        if let Some(actual) = macos_get_input(display_num) {
+            if actual == input_value {
+                Ok(format!("已切换到 {}", input_name(input_value)))
+            } else {
+                Ok(format!(
+                    "已发送切换指令到 {}，但显示器当前仍为 {}（目标端口可能无信号）",
+                    input_name(input_value),
+                    input_name(actual)
+                ))
+            }
         } else {
-            Ok(format!("已切换到 {}", input_name(input_value)))
+            Ok(format!("已发送切换指令到 {}（无法验证结果）", input_name(input_value)))
         }
     } else {
         let stdout = String::from_utf8_lossy(&output.stdout);
