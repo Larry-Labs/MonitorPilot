@@ -60,6 +60,7 @@
 
 ## 9. 打包与分发
 
-- [ ] 9.1 配置 Tauri 打包：macOS (.dmg)、Linux (.deb/.AppImage)、Windows (.msi)
-- [ ] 9.2 设计应用图标（多尺寸）
+- [ ] 9.1 配置 Tauri 打包：macOS (.dmg)、Windows (.exe 绿色免安装)、Linux (.AppImage)
+- [ ] 9.2 设计应用图标（多尺寸，适配各平台要求）
 - [ ] 9.3 配置 GitHub Actions CI/CD 自动构建三平台安装包
+- [ ] 9.4 Windows 绿色版配置：确保单 .exe 文件包含所有资源，无需安装

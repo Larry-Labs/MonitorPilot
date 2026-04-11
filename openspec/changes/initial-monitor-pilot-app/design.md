@@ -58,14 +58,21 @@
 - 无需外部 CLI 工具，零外部依赖
 - Rust 原生集成，无 FFI 开销
 
-### 3. 前端技术：React + TypeScript
+### 3. 前端技术：React + shadcn/ui
 
-**选择**：React 18 + TypeScript + Tailwind CSS
+**选择**：React 18 + TypeScript + Tailwind CSS + shadcn/ui
+
+**备选方案**：
+- Svelte 5 + Skeleton UI：极致轻量但生态较小
+- Vue 3 + Naive UI：中文社区强但 Tauri 模板较少
+- Solid.js：性能极致但组件库匮乏
 
 **理由**：
-- React 生态成熟，组件库丰富
+- React 生态最成熟，组件库丰富
+- shadcn/ui 基于 Radix UI，设计精美（Linear/Raycast 风格），暗色/亮色主题开箱即用
+- shadcn/ui 是复制到项目中的代码而非依赖包，完全可控不受上游升级影响
 - TypeScript 提供类型安全
-- Tailwind CSS 实现快速美观的 UI 开发
+- Tailwind CSS 实现快速美观的 UI 定制
 - Tauri 的 `@tauri-apps/api` 提供完整的前端 ↔ Rust 通信桥接
 
 ### 4. 数据持久化：JSON 配置文件
@@ -111,6 +118,20 @@
 │  └───────────┘  └─────────────┘ │
 └─────────────────────────────────┘
 ```
+
+### 6. 分发格式选型
+
+| 平台 | 格式 | 说明 |
+|------|------|------|
+| **macOS** | `.dmg` 磁盘镜像 | 标准 macOS 分发格式，双击打开拖入 Applications |
+| **Windows** | `.exe` 绿色免安装版 | 单文件可执行，解压即用，无需安装器 |
+| **Linux** | `.AppImage` | 通用格式，免安装，双击直接运行，兼容所有主流发行版 |
+
+**理由**：
+- macOS 用户习惯 .dmg 安装流程
+- Windows 绿色版零门槛，无需管理员权限，便于企业环境分发
+- AppImage 是 Linux 最通用的免安装格式，不依赖特定包管理器
+- Tauri 2 内置支持以上所有格式的打包
 
 ## Risks / Trade-offs
 
