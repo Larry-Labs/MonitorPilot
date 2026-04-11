@@ -123,6 +123,12 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
                       </svg>
                       切换中
                     </span>
+                  ) : isActive ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      {displayName}
+                      <span className="text-[9px] opacity-75 font-normal">当前</span>
+                    </span>
                   ) : (
                     displayName
                   )}
