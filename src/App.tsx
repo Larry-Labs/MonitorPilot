@@ -71,52 +71,34 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="relative border-b border-border overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-primary/3 to-transparent dark:from-primary/10 dark:via-primary/5" />
+      {/* Header */}
+      <header className="relative border-b border-border/60 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-primary/4 to-transparent" />
+        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
         <div className="relative px-6 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/20">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-primary"
-              >
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/25">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect width="20" height="14" x="2" y="3" rx="2" />
                 <line x1="8" x2="16" y1="21" y2="21" />
                 <line x1="12" x2="12" y1="17" y2="21" />
               </svg>
             </div>
             <div>
-              <h1 className="text-lg font-semibold tracking-tight">MonitorPilot</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                通过 DDC/CI 协议控制显示器输入源，告别物理按键
+              <h1 className="text-lg font-bold tracking-tight">MonitorPilot</h1>
+              <p className="text-xs text-muted-foreground">
+                DDC/CI 显示器输入源切换 · 告别物理按键
               </p>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 p-6 space-y-4">
+      {/* Content */}
+      <main className="flex-1 p-5 space-y-4">
         {error && (
           <Alert variant="destructive">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
               <line x1="12" x2="12" y1="8" y2="12" />
               <line x1="12" x2="12.01" y1="16" y2="16" />
@@ -133,62 +115,67 @@ function App() {
         )}
 
         {!loading && monitors.length === 0 && !error && (
-          <div className="flex flex-col items-center justify-center py-20 space-y-5">
+          <div className="flex flex-col items-center justify-center py-16 space-y-5">
             <div className="relative">
-              <div className="absolute inset-0 rounded-full bg-muted/50 blur-xl scale-150" />
-              <div className="relative rounded-full bg-muted p-5">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="36"
-                  height="36"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-muted-foreground"
-                >
+              <div className="absolute inset-0 rounded-full bg-primary/10 blur-2xl scale-[2]" />
+              <div className="relative rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 p-6 border border-primary/10">
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary/60">
                   <rect width="20" height="14" x="2" y="3" rx="2" />
                   <line x1="8" x2="16" y1="21" y2="21" />
                   <line x1="12" x2="12" y1="17" y2="21" />
                 </svg>
               </div>
             </div>
-            <div className="text-center space-y-2">
-              <p className="text-sm font-medium text-foreground">
-                未检测到 DDC/CI 兼容显示器
-              </p>
-              <div className="text-xs text-muted-foreground max-w-sm leading-relaxed space-y-1">
+            <div className="text-center space-y-2.5">
+              <p className="text-sm font-semibold text-foreground">未检测到 DDC/CI 兼容显示器</p>
+              <div className="text-xs text-muted-foreground max-w-xs leading-relaxed space-y-1.5">
                 <p>请检查以下项目：</p>
-                <ul className="text-left list-disc list-inside space-y-0.5">
-                  <li>显示器已开启 DDC/CI 功能（OSD 菜单 → 设置）</li>
-                  <li>DP 或 HDMI 线缆已正确连接</li>
-                  <li>macOS 用户需安装 m1ddc（<code className="text-xs px-1 py-0.5 rounded bg-muted">brew install m1ddc</code>）</li>
+                <ul className="text-left list-none space-y-1">
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary mt-0.5">•</span>
+                    <span>显示器已开启 DDC/CI（OSD 菜单 → 设置）</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary mt-0.5">•</span>
+                    <span>DP 或 HDMI 线缆已正确连接</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary mt-0.5">•</span>
+                    <span>macOS 需安装 <code className="text-[10px] px-1 py-0.5 rounded bg-muted font-mono">brew install m1ddc</code></span>
+                  </li>
                 </ul>
               </div>
             </div>
           </div>
         )}
 
-        {!loading &&
-          monitors.map((monitor) => (
-            <MonitorCard
-              key={monitor.index}
-              monitor={monitor}
-              switching={switching}
-              customNames={customNames}
-              onSwitch={handleSwitch}
-              onRename={handleRename}
-            />
-          ))}
+        {!loading && monitors.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">
+                检测到 {monitors.length} 台显示器
+              </p>
+            </div>
+            {monitors.map((monitor) => (
+              <MonitorCard
+                key={monitor.index}
+                monitor={monitor}
+                switching={switching}
+                customNames={customNames}
+                onSwitch={handleSwitch}
+                onRename={handleRename}
+              />
+            ))}
+          </div>
+        )}
 
         {!loading && <FeatureTips />}
       </main>
 
-      <footer className="border-t border-border px-6 py-3 text-center">
-        <p className="text-[10px] text-muted-foreground/60">
-          MonitorPilot v0.1.0 · DDC/CI Monitor Input Switcher
+      {/* Footer */}
+      <footer className="border-t border-border/40 px-6 py-2.5">
+        <p className="text-[10px] text-muted-foreground/50 text-center">
+          MonitorPilot v0.1.0
         </p>
       </footer>
     </div>

@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent, CardHeader } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Separator } from "./ui/separator";
 import type { MonitorInfo, InputSource } from "../types/monitor";
 
 interface MonitorCardProps {
@@ -45,44 +44,30 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
     : monitor.current_input_name;
 
   return (
-    <Card className="transition-shadow hover:shadow-md dark:hover:shadow-primary/5">
-      <CardHeader className="pb-3">
+    <Card className="overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-primary/5 border-border/60">
+      <CardHeader className="pb-3 pt-4 px-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-7 h-7 rounded-md bg-primary/8 dark:bg-primary/15">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-primary"
-              >
+          <div className="flex items-center gap-3">
+            <div className="relative flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/10">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
                 <rect width="20" height="14" x="2" y="3" rx="2" />
                 <line x1="8" x2="16" y1="21" y2="21" />
                 <line x1="12" x2="12" y1="17" y2="21" />
               </svg>
             </div>
-            <CardTitle className="text-sm font-medium">
-              {monitor.model}
-            </CardTitle>
+            <div>
+              <p className="text-sm font-semibold leading-tight">{monitor.model}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">#{monitor.index}</p>
+            </div>
           </div>
-          <Badge
-            variant="secondary"
-            className="text-xs font-medium bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground border-0"
-          >
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />
+          <Badge className="text-[11px] font-medium bg-primary/10 text-primary hover:bg-primary/15 border-primary/15 gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             {activeDisplayName}
           </Badge>
         </div>
       </CardHeader>
-      <Separator />
-      <CardContent className="pt-4">
-        <p className="text-xs text-muted-foreground mb-3">选择输入源</p>
+
+      <CardContent className="px-4 pb-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {monitor.supported_inputs.map((input) => {
             const isActive = monitor.current_input === input.value;
@@ -106,7 +91,7 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
                     }
                   }}
                   placeholder={input.name}
-                  className="h-9 text-xs"
+                  className="h-10 text-xs border-primary/30 focus-visible:ring-primary/30"
                   aria-label={`重命名 ${input.name}`}
                   autoFocus
                 />
@@ -118,10 +103,10 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
                 <Button
                   variant={isActive ? "default" : "outline"}
                   size="sm"
-                  className={`w-full text-xs h-9 transition-all ${
+                  className={`w-full text-xs h-10 transition-all duration-200 font-medium ${
                     isActive
-                      ? "shadow-sm"
-                      : "hover:border-primary/30 hover:bg-primary/5 dark:hover:bg-primary/10"
+                      ? "shadow-md shadow-primary/20"
+                      : "hover:border-primary/40 hover:bg-primary/5 hover:text-primary dark:hover:bg-primary/10"
                   }`}
                   disabled={isSwitching}
                   onClick={() => {
@@ -143,7 +128,7 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
                   )}
                 </Button>
                 <button
-                  className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full bg-background border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 shadow-sm transition-all"
+                  className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-primary hover:border-primary/40 transition-all duration-150"
                   onClick={(e) => {
                     e.stopPropagation();
                     startEditing(input);
@@ -151,17 +136,7 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
                   title="重命名"
                   aria-label={`编辑 ${displayName} 的名称`}
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="9"
-                    height="9"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
                   </svg>
                 </button>
