@@ -7,7 +7,7 @@ import { Button } from "./components/ui/button";
 import type { MonitorInfo, MonitorListResult, AppConfig } from "./types/monitor";
 
 type ToastState = {
-  type: "switching" | "success" | "error";
+  type: "switching" | "success" | "warning" | "error";
   message: string;
 } | null;
 
@@ -54,7 +54,7 @@ function App() {
         setError(null);
       }
     } catch {
-      // silent — don't overwrite existing state on poll failure
+      // silent
     }
   }, []);
 
@@ -96,16 +96,17 @@ function App() {
   const handleSwitch = async (monitorIndex: number, inputValue: number) => {
     const key = `${monitorIndex}-${inputValue}`;
     setSwitching(key);
-    setError(null);
     showToast({ type: "switching", message: "正在切换输入源..." });
     try {
       const result = await invoke<string>("cmd_switch_input", { monitorIndex, inputValue });
       await refreshMonitors();
-      showToast({ type: "success", message: result }, 2500);
+      const isWarning = result.includes("仍为") || result.includes("无法验证");
+      showToast(
+        { type: isWarning ? "warning" : "success", message: result },
+        isWarning ? 4000 : 2500
+      );
     } catch (e) {
-      const errorMsg = String(e);
-      setError(errorMsg);
-      showToast({ type: "error", message: `切换失败，已恢复原输入 — ${errorMsg}` }, 4000);
+      showToast({ type: "error", message: String(e) }, 4000);
     } finally {
       setSwitching(null);
     }
@@ -125,8 +126,15 @@ function App() {
       await invoke("cmd_save_config", { config: { input_names: updated } });
     } catch (e) {
       setCustomNames(previous);
-      setError(String(e));
+      showToast({ type: "error", message: String(e) }, 3000);
     }
+  };
+
+  const toastColors = {
+    switching: "bg-primary/5 text-primary border-primary/15",
+    success: "bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/15",
+    warning: "bg-amber-500/5 text-amber-600 dark:text-amber-400 border-amber-500/15",
+    error: "bg-destructive/5 text-destructive border-destructive/15",
   };
 
   return (
@@ -152,38 +160,6 @@ function App() {
           </div>
         </div>
       </header>
-
-      {toast && (
-        <div
-          className={`mx-4 mt-3 px-3.5 py-2.5 rounded-lg text-xs font-medium flex items-center gap-2.5 border ${
-            toast.type === "switching"
-              ? "bg-primary/5 text-primary border-primary/15"
-              : toast.type === "success"
-                ? "bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/15"
-                : "bg-destructive/5 text-destructive border-destructive/15"
-          }`}
-        >
-          {toast.type === "switching" && (
-            <svg className="animate-spin h-3.5 w-3.5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-          )}
-          {toast.type === "success" && (
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          )}
-          {toast.type === "error" && (
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="15" x2="9" y1="9" y2="15" />
-              <line x1="9" x2="15" y1="9" y2="15" />
-            </svg>
-          )}
-          <span>{toast.message}</span>
-        </div>
-      )}
 
       <main className="flex-1 px-5 py-4 space-y-3 overflow-y-auto">
         {error && (
@@ -279,6 +255,39 @@ function App() {
           </div>
         )}
       </main>
+
+      {toast && (
+        <div
+          className={`mx-4 mb-2 px-3.5 py-2.5 rounded-lg text-xs font-medium flex items-center gap-2.5 border ${toastColors[toast.type]}`}
+        >
+          {toast.type === "switching" && (
+            <svg className="animate-spin h-3.5 w-3.5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+          )}
+          {toast.type === "success" && (
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          )}
+          {toast.type === "warning" && (
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+              <line x1="12" x2="12" y1="9" y2="13" />
+              <line x1="12" x2="12.01" y1="17" y2="17" />
+            </svg>
+          )}
+          {toast.type === "error" && (
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" x2="9" y1="9" y2="15" />
+              <line x1="9" x2="15" y1="9" y2="15" />
+            </svg>
+          )}
+          <span className="leading-relaxed">{toast.message}</span>
+        </div>
+      )}
 
       <footer className="border-t border-border/40 px-5 py-2">
         <p className="text-[10px] text-muted-foreground/70 text-center">
