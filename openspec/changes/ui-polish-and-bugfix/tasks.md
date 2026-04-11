@@ -1,0 +1,38 @@
+## 1. 后端 Bug 修复
+
+- [x] 1.1 修复 `tray.rs` 中 TrayIconBuilder 未设置 id，确保 `refresh_tray` 能通过 `tray_by_id("main")` 找到托盘实例
+- [x] 1.2 移除 `config.rs` 中未使用的 `update_input_name` 方法
+- [x] 1.3 修复 `tray.rs` 中 `handle_menu_event` 切换失败被静默吞掉的问题，添加日志输出
+
+## 2. 前端错误处理
+
+- [x] 2.1 为 `App.tsx` 中 `cmd_get_config` 调用添加 `.catch` 错误处理
+- [x] 2.2 修复 `monitor-card.tsx` 中 `onSwitch` 第三参数未使用的问题，对齐接口定义
+
+## 3. 类型重构
+
+- [x] 3.1 创建 `src/types/monitor.ts`，提取 `InputSource` 和 `MonitorInfo` 类型定义
+- [x] 3.2 更新 `App.tsx` 和 `monitor-card.tsx` 从共享类型文件导入
+
+## 4. 暗色模式
+
+- [x] 4.1 在 `index.html` 中添加内联脚本，根据 `prefers-color-scheme` 在页面渲染前设置 `dark` 类
+- [x] 4.2 修复 `index.html` 的 `lang` 属性为 `zh-CN`
+
+## 5. UI 美化
+
+- [x] 5.1 添加 shadcn/ui Skeleton 组件，实现加载骨架屏
+- [x] 5.2 使用 shadcn/ui Alert 组件替代当前的纯文本错误提示
+- [x] 5.3 重做空状态：使用图标 + 描述 + 操作建议的结构化布局
+- [x] 5.4 为输入源添加显式编辑按钮图标，替代仅双击触发重命名
+- [x] 5.5 将输入源网格从固定 `grid-cols-3` 改为响应式布局
+
+## 6. 项目合规
+
+- [x] 6.1 在根目录创建 MIT LICENSE 文件
+- [x] 6.2 确认 `package-lock.json` 已纳入 Git 跟踪
+
+## 7. 构建验证
+
+- [x] 7.1 运行 `cargo check` 确认后端无警告
+- [x] 7.2 运行 `npm run tauri build` 确认构建成功

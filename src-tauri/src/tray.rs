@@ -9,7 +9,7 @@ use crate::monitor::{get_monitors, switch_input};
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let menu = build_tray_menu(app)?;
 
-    TrayIconBuilder::new()
+    TrayIconBuilder::with_id("main")
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
         .tooltip("MonitorPilot")
@@ -108,7 +108,10 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
                 if let (Ok(monitor_idx), Ok(input_val)) =
                     (parts[1].parse::<usize>(), parts[2].parse::<u8>())
                 {
-                    let _ = switch_input(monitor_idx, input_val);
+                    match switch_input(monitor_idx, input_val) {
+                        Ok(_) => log::info!("托盘切换成功: 显示器 {} → 输入 {}", monitor_idx, input_val),
+                        Err(e) => log::error!("托盘切换失败: {}", e),
+                    }
                     refresh_tray(app);
                 }
             }

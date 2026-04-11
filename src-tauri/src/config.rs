@@ -57,13 +57,4 @@ impl ConfigManager {
         Ok(())
     }
 
-    pub fn update_input_name(&self, key: String, name: String) -> Result<(), String> {
-        let mut config = self.get();
-        if name.is_empty() {
-            config.input_names.remove(&key);
-        } else {
-            config.input_names.insert(key, name);
-        }
-        self.save(config)
-    }
 }
