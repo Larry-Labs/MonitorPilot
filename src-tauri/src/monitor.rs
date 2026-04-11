@@ -1,3 +1,4 @@
+use log;
 use serde::Serialize;
 use std::process::Command;
 
@@ -78,6 +79,8 @@ fn find_m1ddc() -> String {
 #[cfg(target_os = "macos")]
 pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
     let m1ddc = find_m1ddc();
+    log::debug!("m1ddc 路径: {}", m1ddc);
+
     let output = Command::new(&m1ddc)
         .args(["display", "list"])
         .output()
@@ -85,10 +88,12 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        log::error!("m1ddc display list 失败: {}", stderr);
         return Err(format!("m1ddc display list 失败: {}", stderr));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
+    log::debug!("m1ddc display list 输出: {}", stdout.trim());
     let mut monitors = Vec::new();
 
     for line in stdout.lines() {
@@ -100,10 +105,19 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
         let (display_num, model) = parse_m1ddc_line(line);
 
         if model == "内置显示器" {
+            log::debug!("跳过内置显示器: display_num={}", display_num);
             continue;
         }
 
         let current_input = macos_get_input(display_num);
+        log::info!(
+            "检测到显示器: #{} {} | 当前输入: {}",
+            display_num,
+            model,
+            current_input
+                .map(|v| input_name(v))
+                .unwrap_or_else(|| "未知".to_string())
+        );
 
         monitors.push(MonitorInfo {
             index: display_num as usize,
@@ -116,6 +130,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
         });
     }
 
+    log::info!("共检测到 {} 台外接显示器", monitors.len());
     Ok(monitors)
 }
 
@@ -176,6 +191,19 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
     let m1ddc = find_m1ddc();
     let display_num = monitor_index as u32;
 
+    let previous_input = macos_get_input(display_num);
+    log::info!(
+        "切换请求: 显示器 #{} | {} → {} | 当前: {}",
+        display_num,
+        previous_input
+            .map(|v| input_name(v))
+            .unwrap_or_else(|| "未知".to_string()),
+        input_name(input_value),
+        previous_input
+            .map(|v| format!("0x{:02X}", v))
+            .unwrap_or_else(|| "N/A".to_string())
+    );
+
     let output = Command::new(&m1ddc)
         .args([
             "set",
@@ -185,30 +213,12 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
             &display_num.to_string(),
         ])
         .output()
-        .map_err(|e| format!("无法执行 m1ddc: {}", e))?;
+        .map_err(|e| {
+            log::error!("m1ddc 执行失败: {}", e);
+            format!("无法执行 m1ddc: {}", e)
+        })?;
 
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let trimmed = stdout.trim();
-        if trimmed.contains("Could not find") || trimmed.contains("error") {
-            return Err(format!("切换失败: {}", trimmed));
-        }
-
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        if let Some(actual) = macos_get_input(display_num) {
-            if actual == input_value {
-                Ok(format!("已切换到 {}", input_name(input_value)))
-            } else {
-                Ok(format!(
-                    "已发送切换指令到 {}，但显示器当前仍为 {}（目标端口可能无信号）",
-                    input_name(input_value),
-                    input_name(actual)
-                ))
-            }
-        } else {
-            Ok(format!("已发送切换指令到 {}（无法验证结果）", input_name(input_value)))
-        }
-    } else {
+    if !output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         let msg = if !stdout.trim().is_empty() {
@@ -218,7 +228,76 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
         } else {
             format!("m1ddc 退出码: {}", output.status)
         };
-        Err(format!("切换失败: {}", msg))
+        log::error!("切换命令失败: {}", msg);
+        return Err(format!("切换失败: {}", msg));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let trimmed = stdout.trim();
+    if trimmed.contains("Could not find") || trimmed.contains("error") {
+        log::error!("m1ddc 返回错误: {}", trimmed);
+        return Err(format!("切换失败: {}", trimmed));
+    }
+
+    log::debug!("切换命令已发送，等待 500ms 验证...");
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    match macos_get_input(display_num) {
+        Some(actual) if actual == input_value => {
+            log::info!("切换成功: 显示器 #{} → {}", display_num, input_name(input_value));
+            Ok(format!("已切换到 {}", input_name(input_value)))
+        }
+        Some(actual) => {
+            log::warn!(
+                "切换未生效: 目标 {} 实际 {} — 目标端口可能无信号",
+                input_name(input_value),
+                input_name(actual)
+            );
+            Ok(format!(
+                "已发送切换指令到 {}，但显示器当前仍为 {}（目标端口可能无信号）",
+                input_name(input_value),
+                input_name(actual)
+            ))
+        }
+        None => {
+            log::warn!(
+                "切换后显示器不可达，尝试回滚到 {:?}",
+                previous_input.map(|v| input_name(v))
+            );
+            if let Some(prev) = previous_input {
+                let rollback = Command::new(&m1ddc)
+                    .args([
+                        "set",
+                        "input",
+                        &prev.to_string(),
+                        "-d",
+                        &display_num.to_string(),
+                    ])
+                    .output();
+
+                match rollback {
+                    Ok(r) if r.status.success() => {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                        let recovered = macos_get_input(display_num);
+                        if recovered == Some(prev) {
+                            log::info!("回滚成功: 已恢复到 {}", input_name(prev));
+                            return Err(format!(
+                                "切换到 {} 后显示器失联，已自动恢复到 {}",
+                                input_name(input_value),
+                                input_name(prev)
+                            ));
+                        }
+                        log::warn!("回滚命令已发送但无法确认结果");
+                    }
+                    Ok(_) => log::error!("回滚命令执行失败"),
+                    Err(e) => log::error!("回滚命令发送失败: {}", e),
+                }
+            }
+            Err(format!(
+                "切换到 {} 后显示器失联（DDC/CI 通信中断），请检查线缆连接",
+                input_name(input_value)
+            ))
+        }
     }
 }
 

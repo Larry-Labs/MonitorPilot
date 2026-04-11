@@ -92,3 +92,40 @@ The system SHALL enable logging in release builds at Info level.
 #### Scenario: Debug mode
 - **WHEN** the application runs in debug mode
 - **THEN** the log plugin SHALL be initialized with `Debug` level filter
+
+### Requirement: Switch failure auto-rollback
+The system SHALL automatically attempt to restore the previous input when a switch causes the monitor to become unreachable.
+
+#### Scenario: Monitor unreachable after switch
+- **WHEN** a switch command is sent and the subsequent input verification returns None (monitor unreachable)
+- **THEN** the system SHALL automatically send a blind rollback command to restore the previous input value
+
+#### Scenario: Rollback success
+- **WHEN** the rollback command succeeds and verification confirms recovery
+- **THEN** the system SHALL return an error message explaining what happened: switch caused disconnect, auto-recovered to previous input
+
+#### Scenario: Rollback failure
+- **WHEN** the rollback command fails or recovery cannot be confirmed
+- **THEN** the system SHALL return an error message indicating DDC/CI communication loss and suggest checking cable connection
+
+### Requirement: Polling state protection
+The system SHALL not clear the monitor list during silent polling when monitors temporarily become unreachable.
+
+#### Scenario: Transient detection failure during polling
+- **WHEN** a silent poll returns empty monitors but the previous state had monitors
+- **THEN** the system SHALL keep the previous monitor state in the UI
+
+#### Scenario: Explicit refresh
+- **WHEN** the user clicks "重新检测" or the application performs an initial load
+- **THEN** the system SHALL update to the actual state, even if empty
+
+### Requirement: Comprehensive DDC/CI logging
+The system SHALL log all DDC/CI operations for debugging.
+
+#### Scenario: Monitor detection
+- **WHEN** `get_monitors` executes
+- **THEN** the system SHALL log: m1ddc binary path, raw output, skipped built-in displays, detected monitors count
+
+#### Scenario: Input switching
+- **WHEN** `switch_input` executes
+- **THEN** the system SHALL log: switch request (from/to), command result, verification result, rollback attempts if any

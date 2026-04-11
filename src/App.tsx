@@ -20,6 +20,7 @@ function App() {
   const [toast, setToast] = useState<ToastState>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const switchLock = useRef(false);
+  const lastMonitorCount = useRef(0);
 
   const showToast = useCallback((state: NonNullable<ToastState>, duration?: number) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -38,6 +39,7 @@ function App() {
         setError(result.error);
       }
       setMonitors(result.monitors);
+      lastMonitorCount.current = result.monitors.length;
     } catch (e) {
       setError(String(e));
     } finally {
@@ -48,12 +50,12 @@ function App() {
   const silentRefresh = useCallback(async () => {
     try {
       const result = await invoke<MonitorListResult>("cmd_get_monitors");
-      setMonitors(result.monitors);
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setError(null);
+      if (result.monitors.length === 0 && lastMonitorCount.current > 0) {
+        return;
       }
+      setMonitors(result.monitors);
+      lastMonitorCount.current = result.monitors.length;
+      setError(result.error || null);
     } catch {
       // silent
     }

@@ -88,8 +88,21 @@
 - [x] 13.1 使用 useRef 互斥锁防止快速连点并发切换
 - [x] 13.2 切换完成后使用 silentRefresh 替代 refreshMonitors，避免 loading 骨架屏
 
-## 14. 构建验证
+## 14. 切换失败自动回滚
 
-- [x] 14.1 运行 `cargo check` 确认后端无警告
-- [x] 14.2 运行 `npm run tauri build` 确认构建成功
-- [x] 14.3 TypeScript 编译检查通过
+- [x] 14.1 switch_input 切换前记录当前输入值
+- [x] 14.2 切换后 monitor 不可达时（get_input 返回 None），自动发送回滚命令恢复原输入
+- [x] 14.3 回滚成功/失败均有明确错误消息返回前端
+- [x] 14.4 前端轮询保护：silentRefresh 在已有显示器状态下不会因瞬态空结果清空 UI
+
+## 15. 全流程日志
+
+- [x] 15.1 monitor.rs 检测流程日志（m1ddc 路径、输出、跳过内置显示器、检测结果）
+- [x] 15.2 monitor.rs 切换流程日志（切换请求、命令结果、验证结果、回滚过程）
+- [x] 15.3 日志级别：debug 用于详细输出，info 用于关键事件，warn/error 用于异常
+
+## 16. 构建验证
+
+- [x] 16.1 运行 `cargo check` 确认后端无警告
+- [x] 16.2 运行 `npm run tauri build` 确认构建成功
+- [x] 16.3 TypeScript 编译检查通过
