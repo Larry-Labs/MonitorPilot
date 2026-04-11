@@ -8,15 +8,12 @@ use std::sync::Mutex;
 pub struct AppConfig {
     #[serde(default)]
     pub input_names: HashMap<String, String>,
-    #[serde(default)]
-    pub tips_dismissed: bool,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             input_names: HashMap::new(),
-            tips_dismissed: false,
         }
     }
 }

@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { MonitorCard } from "./components/monitor-card";
 import { MonitorCardSkeleton } from "./components/monitor-card-skeleton";
-import { FeatureTips } from "./components/feature-tips";
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
 import type { MonitorInfo, MonitorListResult, AppConfig } from "./types/monitor";
 
@@ -12,7 +11,6 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
   const [customNames, setCustomNames] = useState<Record<string, string>>({});
-  const [tipsDismissed, setTipsDismissed] = useState(true);
 
   const refreshMonitors = useCallback(async () => {
     setLoading(true);
@@ -35,7 +33,6 @@ function App() {
     invoke<AppConfig>("cmd_get_config")
       .then((config) => {
         setCustomNames(config.input_names || {});
-        setTipsDismissed(config.tips_dismissed ?? false);
       })
       .catch((e) => {
         console.error("加载配置失败:", e);
@@ -50,8 +47,7 @@ function App() {
       await invoke("cmd_switch_input", { monitorIndex, inputValue });
       await refreshMonitors();
     } catch (e) {
-      const errorMsg = String(e);
-      setError(errorMsg);
+      setError(String(e));
     } finally {
       setSwitching(null);
     }
@@ -75,7 +71,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Header */}
       <header className="relative border-b border-border/60 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-primary/4 to-transparent" />
         <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
@@ -98,7 +93,6 @@ function App() {
         </div>
       </header>
 
-      {/* Content */}
       <main className="flex-1 p-5 space-y-4">
         {error && (
           <Alert variant="destructive">
@@ -145,7 +139,7 @@ function App() {
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-primary mt-0.5">•</span>
-                    <span>macOS 需安装 <code className="text-[10px] px-1 py-0.5 rounded bg-muted font-mono">brew install m1ddc</code></span>
+                    <span>外接显示器已连接（内置屏幕不支持 DDC/CI）</span>
                   </li>
                 </ul>
               </div>
@@ -172,22 +166,8 @@ function App() {
             ))}
           </div>
         )}
-
-        {!loading && !tipsDismissed && (
-          <FeatureTips onDismiss={async () => {
-            setTipsDismissed(true);
-            try {
-              await invoke("cmd_save_config", {
-                config: { input_names: customNames, tips_dismissed: true }
-              });
-            } catch (e) {
-              console.error("保存配置失败:", e);
-            }
-          }} />
-        )}
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-border/40 px-6 py-2.5">
         <p className="text-[10px] text-muted-foreground/50 text-center">
           MonitorPilot v0.1.0
