@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { MonitorCard } from "./components/monitor-card";
+import { HotkeyConfig } from "./components/hotkey-config";
 import { TooltipProvider } from "./components/ui/tooltip";
 
 interface InputSource {
@@ -99,6 +100,8 @@ function App() {
               onSwitch={handleSwitch}
             />
           ))}
+
+          {monitors.length > 0 && <HotkeyConfig monitors={monitors} />}
         </main>
       </div>
     </TooltipProvider>
