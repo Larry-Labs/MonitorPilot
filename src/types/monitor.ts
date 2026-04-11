@@ -18,4 +18,5 @@ export interface MonitorListResult {
 
 export interface AppConfig {
   input_names: Record<string, string>;
+  tips_dismissed: boolean;
 }

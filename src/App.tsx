@@ -12,6 +12,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
   const [customNames, setCustomNames] = useState<Record<string, string>>({});
+  const [tipsDismissed, setTipsDismissed] = useState(true);
 
   const refreshMonitors = useCallback(async () => {
     setLoading(true);
@@ -34,6 +35,7 @@ function App() {
     invoke<AppConfig>("cmd_get_config")
       .then((config) => {
         setCustomNames(config.input_names || {});
+        setTipsDismissed(config.tips_dismissed ?? false);
       })
       .catch((e) => {
         console.error("加载配置失败:", e);
@@ -171,7 +173,18 @@ function App() {
           </div>
         )}
 
-        {!loading && <FeatureTips />}
+        {!loading && !tipsDismissed && (
+          <FeatureTips onDismiss={async () => {
+            setTipsDismissed(true);
+            try {
+              await invoke("cmd_save_config", {
+                config: { input_names: customNames, tips_dismissed: true }
+              });
+            } catch (e) {
+              console.error("保存配置失败:", e);
+            }
+          }} />
+        )}
       </main>
 
       {/* Footer */}

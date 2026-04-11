@@ -48,8 +48,22 @@ fn default_supported_inputs() -> Vec<InputSource> {
 // --- macOS: use m1ddc CLI ---
 
 #[cfg(target_os = "macos")]
+fn find_m1ddc() -> String {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let sidecar = dir.join("m1ddc");
+            if sidecar.exists() {
+                return sidecar.to_string_lossy().to_string();
+            }
+        }
+    }
+    "m1ddc".to_string()
+}
+
+#[cfg(target_os = "macos")]
 pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
-    let output = Command::new("m1ddc")
+    let m1ddc = find_m1ddc();
+    let output = Command::new(&m1ddc)
         .args(["display", "list"])
         .output()
         .map_err(|e| format!("无法执行 m1ddc: {}。请确认已安装: brew install m1ddc", e))?;
@@ -125,7 +139,8 @@ fn parse_m1ddc_display_name(line: &str) -> String {
 
 #[cfg(target_os = "macos")]
 fn macos_get_input(display_num: u32) -> Option<u8> {
-    let output = Command::new("m1ddc")
+    let m1ddc = find_m1ddc();
+    let output = Command::new(&m1ddc)
         .args(["get", "input", "-d", &display_num.to_string()])
         .output()
         .ok()?;
@@ -137,9 +152,10 @@ fn macos_get_input(display_num: u32) -> Option<u8> {
 
 #[cfg(target_os = "macos")]
 pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, String> {
+    let m1ddc = find_m1ddc();
     let display_num = monitor_index as u32;
 
-    let output = Command::new("m1ddc")
+    let output = Command::new(&m1ddc)
         .args([
             "set",
             "input",

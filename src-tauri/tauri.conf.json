@@ -29,6 +29,7 @@
   "bundle": {
     "active": true,
     "targets": ["dmg", "appimage", "nsis"],
+    "externalBin": ["binaries/m1ddc"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
