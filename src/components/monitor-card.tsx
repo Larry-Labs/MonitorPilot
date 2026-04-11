@@ -37,27 +37,52 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
     }
   };
 
+  const activeInput = monitor.supported_inputs.find(
+    (i) => i.value === monitor.current_input
+  );
+  const activeDisplayName = activeInput
+    ? getDisplayName(activeInput)
+    : monitor.current_input_name;
+
   return (
-    <Card>
+    <Card className="transition-shadow hover:shadow-md dark:hover:shadow-primary/5">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-medium">
-            {monitor.model}
-          </CardTitle>
-          <Badge variant="secondary" className="text-xs">
-            {monitor.current_input != null
-              ? getDisplayName(
-                  monitor.supported_inputs.find(
-                    (i) => i.value === monitor.current_input
-                  ) || { value: monitor.current_input, name: monitor.current_input_name }
-                )
-              : monitor.current_input_name}
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-7 h-7 rounded-md bg-primary/8 dark:bg-primary/15">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-primary"
+              >
+                <rect width="20" height="14" x="2" y="3" rx="2" />
+                <line x1="8" x2="16" y1="21" y2="21" />
+                <line x1="12" x2="12" y1="17" y2="21" />
+              </svg>
+            </div>
+            <CardTitle className="text-sm font-medium">
+              {monitor.model}
+            </CardTitle>
+          </div>
+          <Badge
+            variant="secondary"
+            className="text-xs font-medium bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground border-0"
+          >
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />
+            {activeDisplayName}
           </Badge>
         </div>
       </CardHeader>
       <Separator />
       <CardContent className="pt-4">
-        <p className="text-xs text-muted-foreground mb-3">切换输入源</p>
+        <p className="text-xs text-muted-foreground mb-3">选择输入源</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {monitor.supported_inputs.map((input) => {
             const isActive = monitor.current_input === input.value;
@@ -81,7 +106,7 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
                     }
                   }}
                   placeholder={input.name}
-                  className="h-8 text-xs"
+                  className="h-9 text-xs"
                   aria-label={`重命名 ${input.name}`}
                   autoFocus
                 />
@@ -93,7 +118,11 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
                 <Button
                   variant={isActive ? "default" : "outline"}
                   size="sm"
-                  className="w-full text-xs"
+                  className={`w-full text-xs h-9 transition-all ${
+                    isActive
+                      ? "shadow-sm"
+                      : "hover:border-primary/30 hover:bg-primary/5 dark:hover:bg-primary/10"
+                  }`}
                   disabled={isSwitching}
                   onClick={() => {
                     if (!isActive) {
@@ -101,10 +130,20 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
                     }
                   }}
                 >
-                  {isSwitching ? "切换中..." : displayName}
+                  {isSwitching ? (
+                    <span className="flex items-center gap-1.5">
+                      <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      切换中
+                    </span>
+                  ) : (
+                    displayName
+                  )}
                 </Button>
                 <button
-                  className="absolute -top-1 -right-1 hidden group-hover:flex items-center justify-center w-4 h-4 rounded-full bg-muted border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full bg-background border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 shadow-sm transition-all"
                   onClick={(e) => {
                     e.stopPropagation();
                     startEditing(input);
@@ -114,8 +153,8 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    width="8"
-                    height="8"
+                    width="9"
+                    height="9"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
