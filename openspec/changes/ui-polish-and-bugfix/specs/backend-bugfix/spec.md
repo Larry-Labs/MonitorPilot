@@ -35,8 +35,8 @@ The project SHALL track `package-lock.json` in Git.
 - **WHEN** GitHub Actions runs `npm ci`
 - **THEN** `package-lock.json` SHALL be present in the repository and compatible with `package.json`
 
-### Requirement: Post-switch input verification
-The system SHALL verify the actual input state after sending a switch command on macOS.
+### Requirement: Post-switch input verification (macOS only)
+The system SHALL verify the actual input state after sending a switch command on macOS. Linux/Windows 路径在 set 成功后直接返回成功信息，暂无读回验证。
 
 #### Scenario: Successful switch
 - **WHEN** a switch command is sent and the monitor's current input matches the target after 500ms

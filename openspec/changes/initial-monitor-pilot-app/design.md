@@ -146,6 +146,18 @@
 - AppImage 是 Linux 最通用的免安装格式，不依赖特定包管理器
 - Tauri 2 内置支持以上所有格式的打包
 
+## 后续演进
+
+本 change 定义了 MonitorPilot 的初始架构和核心能力。以下功能在后续 `ui-polish-and-bugfix` change 中定型：
+
+- 托盘菜单扁平化（版本+作者标题、移除 emoji）
+- 切换后验证与回滚（macOS，500ms 读回）
+- DDC_LOCK 互斥锁（在 `monitor.rs` 的 `switch_input` 内部）
+- CSP 安全策略
+- 暗色模式、骨架屏、Toast 通知系统
+- 热插拔检测（5s 轮询 + 可见性控制）
+- 测试套件（Vitest + Rust #[test]）
+
 ## Risks / Trade-offs
 
 - **[DDC/CI 兼容性]** → 并非所有显示器都支持 DDC/CI，部分显示器默认关闭。**缓解**：应用首次启动时检测并引导用户开启 DDC/CI；提供 FAQ 文档。

@@ -5,22 +5,20 @@ The system SHALL detect all monitors connected to the host that support DDC/CI p
 
 #### Scenario: Multiple monitors connected
 - **WHEN** the application starts or user triggers a refresh
-- **THEN** the system SHALL return a list of all DDC/CI-capable monitors with their model name, manufacturer, and current input source
+- **THEN** the system SHALL return a list of all DDC/CI-capable monitors with their model name and current input source
 
 #### Scenario: No DDC/CI capable monitor found
 - **WHEN** no connected monitor supports DDC/CI
 - **THEN** the system SHALL display a clear message explaining that no compatible monitors were found and guide the user to enable DDC/CI in their monitor's OSD menu
 
 ### Requirement: Read monitor capabilities
-The system SHALL read each detected monitor's supported input sources via DDC/CI VCP capabilities string.
+The system SHALL provide a list of supported input sources for each detected monitor.
 
 #### Scenario: Monitor reports supported inputs
 - **WHEN** a DDC/CI capable monitor is detected
-- **THEN** the system SHALL parse VCP code 0x60 capabilities to enumerate all supported input source types (e.g., DP-1, HDMI-1, USB-C) and their corresponding VCP values
+- **THEN** the system SHALL present a predefined list of common input sources (DP-1, DP-2, HDMI-1, HDMI-2, USB-C, VGA, DVI) and dynamically include the current input value if not already in the list
 
-#### Scenario: Capabilities query fails
-- **WHEN** the DDC/CI capabilities query fails for a monitor
-- **THEN** the system SHALL fall back to common input source codes and allow the user to manually configure the available inputs
+> **实现说明**：当前未实现 VCP 0x60 能力串解析（需连接显示器后调试）。采用启发式预置列表 + 当前输入值动态并入的策略，对绝大多数场景已足够。
 
 ### Requirement: Read current input source
 The system SHALL read the current active input source of each detected monitor.

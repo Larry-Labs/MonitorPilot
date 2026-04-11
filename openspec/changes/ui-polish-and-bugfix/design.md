@@ -16,8 +16,9 @@ MonitorPilot v0.1.0 已完成核心功能（显示器检测、输入切换、系
 
 - 不扩展 DDC/CI 能力边界（如亮度调节、分屏控制等）
 - 不重构 Rust 后端架构
-- 不添加测试框架（后续单独 change）
 - 不做国际化/多语言支持
+
+> 注：测试框架已在本 change 后期引入（Vitest + React Testing Library 用于前端，Rust 内置 `#[test]` 用于后端），详见 `vite.config.ts` 和 `src-tauri/src/monitor.rs`、`config.rs` 中的测试模块。
 
 ## Decisions
 

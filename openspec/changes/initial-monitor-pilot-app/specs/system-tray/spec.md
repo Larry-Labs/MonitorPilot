@@ -5,7 +5,7 @@ The application SHALL run as a system tray (menu bar on macOS) application with 
 
 #### Scenario: Application launched
 - **WHEN** the application starts
-- **THEN** a tray icon SHALL appear in the system tray / macOS menu bar and the main window SHALL remain hidden by default
+- **THEN** a tray icon SHALL appear in the system tray / macOS menu bar and the main window SHALL be visible by default
 
 #### Scenario: Click tray icon
 - **WHEN** the user clicks the tray icon
@@ -29,9 +29,9 @@ The tray menu SHALL provide one-click input source switching for each detected m
 ### Requirement: Tray context menu
 The tray menu SHALL include utility options for application management.
 
-#### Scenario: Access settings
-- **WHEN** the user selects "Settings" from the tray menu
-- **THEN** the main settings window SHALL open
+#### Scenario: Access main window
+- **WHEN** the user selects "打开主界面..." from the tray menu
+- **THEN** the main window SHALL open and receive focus
 
 #### Scenario: Quit application
 - **WHEN** the user selects "Quit" from the tray menu

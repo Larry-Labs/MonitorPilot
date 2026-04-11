@@ -117,15 +117,17 @@
 - [x] 16.12 tray.rs: `open::that` 错误记录日志
 - [x] 16.13 tray.rs: 菜单 ID 解析失败记录日志
 
-## 17. 构建验证
+## 17. 构建与测试验证
 
 - [x] 17.1 运行 `cargo check` 确认后端无警告
 - [x] 17.2 运行 `npm run tauri build` 确认构建成功
 - [x] 17.3 TypeScript 编译检查通过
+- [x] 17.4 运行 `cargo test`（19 个 Rust 单元测试全部通过）
+- [x] 17.5 运行 `npm test`（30 个前端测试全部通过）
 
 ## 18. 代码审查修复（10 轮深度审查）
 
-- [x] 18.1 lib.rs: 添加 DDC_LOCK 互斥锁，保证后端 DDC 操作串行化
+- [x] 18.1 monitor.rs: 添加 DDC_LOCK 互斥锁到 switch_input 内部，保证后端 DDC 操作串行化（后由 §20.1 下沉至模块层）
 - [x] 18.2 tauri.conf.json: 设置 CSP 安全策略（替代 `csp: null`）
 - [x] 18.3 Cargo.toml: `ddc-hi` 改为条件依赖，仅 Linux/Windows 编译
 - [x] 18.4 monitor.rs: `find_m1ddc()` 使用 OnceLock 缓存路径，避免重复查找
@@ -155,3 +157,13 @@
 - [x] 20.6 Cargo.toml repository 填充实际仓库 URL
 - [x] 20.7 Cargo.toml authors 统一为 "Larry Gao"
 - [x] 20.8 OpenSpec spec 文档同步：托盘扁平化、DDC_LOCK 下沉、作者位置
+
+## 21. 测试套件
+
+- [x] 21.1 搭建 Vitest + React Testing Library 前端测试框架
+- [x] 21.2 编写 MonitorCard 组件测试（13 个测试：渲染、交互、编辑、无障碍）
+- [x] 21.3 编写 App 组件测试（10 个测试：生命周期、错误处理、切换流程）
+- [x] 21.4 编写类型定义测试（7 个测试：接口结构验证）
+- [x] 21.5 编写 Rust monitor.rs 单元测试（input_name、supported_inputs、parse_m1ddc_line）
+- [x] 21.6 编写 Rust config.rs 单元测试（序列化、持久化、损坏恢复）
+- [x] 21.7 验证所有测试通过：19 Rust + 30 前端

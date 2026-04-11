@@ -8,8 +8,13 @@
 - 系统托盘常驻，右键快速切换
 - 自定义输入源名称（如 "MacBook" 代替 "DP-1"）
 - 单实例运行保证（不会重复启动多个实例）
+- 热插拔检测：5 秒轮询自动同步显示器状态
+- 切换后验证：macOS 自动读回输入状态，检测无信号端口并回滚
+- 并发保护：DDC 串行锁防止快速操作导致总线冲突
+- Toast 通知：切换中/成功/警告/失败四态反馈
+- 暗色模式：自动跟随系统偏好
 - 支持 macOS / Linux / Windows
-- 极致轻量（macOS .dmg 仅 3.7MB）
+- 极致轻量
 
 ## 技术栈
 
@@ -43,9 +48,27 @@ npm install
 # 启动开发模式（前端 + Rust 后端热重载）
 npm run tauri dev
 
+# 仅前端开发（Vite）
+npm run dev
+
 # 构建生产版本
 npm run tauri build
 ```
+
+## 测试
+
+```bash
+# 前端测试（Vitest + React Testing Library）
+npm test
+
+# 前端测试（监听模式）
+npm run test:watch
+
+# 后端测试（Rust）
+cd src-tauri && cargo test
+```
+
+前端共 30 个测试（App 生命周期、MonitorCard 交互、类型定义），后端共 19 个测试（输入映射、配置持久化、m1ddc 解析）。
 
 ## 分发格式
 

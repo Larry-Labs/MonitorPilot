@@ -53,3 +53,4 @@
 - **新增 Rust 依赖**：`open`（打开浏览器链接）
 - **删除前端依赖**：`@tauri-apps/plugin-fs`、`@tauri-apps/plugin-shell`、`lucide-react`
 - **删除组件**：`feature-tips.tsx`、`scroll-area.tsx`、`tooltip.tsx`、`separator.tsx`
+- **测试框架**：前端 Vitest + React Testing Library（`vite.config.ts` 测试配置、`src/test/setup.ts`、`src/**/__tests__/`）；后端 Rust `#[test]`（`monitor.rs`、`config.rs`）

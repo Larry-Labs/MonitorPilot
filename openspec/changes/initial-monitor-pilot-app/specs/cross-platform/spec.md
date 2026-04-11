@@ -16,11 +16,13 @@ The application SHALL run on Linux distributions with X11 or Wayland display ser
 
 #### Scenario: Linux DDC/CI access
 - **WHEN** running on Linux
-- **THEN** the system SHALL access DDC/CI via i2c-dev kernel module and SHALL detect if the module is loaded and the user has appropriate permissions (i2c group membership)
+- **THEN** the system SHALL access DDC/CI via i2c-dev kernel module using the `ddc-hi` crate
 
-#### Scenario: Linux permission setup
+#### Scenario: Linux permission setup (Future)
 - **WHEN** the i2c-dev module is not loaded or user lacks permissions
-- **THEN** the system SHALL display setup instructions and optionally offer to run the setup commands (with user confirmation)
+- **THEN** the user SHALL follow README instructions to load the module and add user to i2c group
+
+> **实现说明**：应用内自动检测 i2c 权限并引导安装尚未实现（需 Linux 环境测试）。当前通过 README 文档说明手动配置步骤。
 
 ### Requirement: Windows support
 The application SHALL run on Windows 10 (1903) and later.

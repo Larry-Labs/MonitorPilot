@@ -9,7 +9,7 @@ The system SHALL switch a monitor's input source by writing to VCP code 0x60 via
 
 #### Scenario: Switch to already active input
 - **WHEN** the user requests switching to the input source that is already active
-- **THEN** the system SHALL skip the DDC/CI write and display a notification that the input is already active
+- **THEN** the system SHALL prevent the switch action (button disabled/inactive, tray menu item disabled) without initiating a DDC/CI write
 
 #### Scenario: Switch command fails
 - **WHEN** the DDC/CI write command fails (e.g., communication error, permission denied)

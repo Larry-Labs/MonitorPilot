@@ -8,8 +8,8 @@ The system SHALL display a skeleton placeholder while monitor data is loading.
 - **THEN** the system SHALL display skeleton card placeholders that match the layout of monitor cards
 
 #### Scenario: Fast load
-- **WHEN** monitor data loads in under 200ms
-- **THEN** the skeleton SHALL still briefly appear to avoid a jarring flash
+- **WHEN** monitor data loads very quickly
+- **THEN** the skeleton may flash briefly; this is an accepted trade-off to avoid adding artificial delays
 
 ### Requirement: Dark mode support
 The system SHALL support dark mode following the user's system preference.
@@ -96,7 +96,7 @@ The system SHALL prevent concurrent DDC/CI switch operations.
 
 #### Scenario: Rapid clicks
 - **WHEN** the user clicks a switch button while another switch operation is in progress
-- **THEN** the system SHALL ignore the second click and not initiate a new DDC/CI command
+- **THEN** the system SHALL block the second click, display a "操作进行中，请稍候..." toast, and not initiate a new DDC/CI command
 
 #### Scenario: Silent refresh after switch
 - **WHEN** a switch operation completes
