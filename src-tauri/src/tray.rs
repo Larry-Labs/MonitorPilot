@@ -37,10 +37,11 @@ fn build_tray_menu(
 ) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn std::error::Error>> {
     let mut builder = MenuBuilder::new(app);
 
-    let title =
-        MenuItemBuilder::with_id("title", format!("MonitorPilot v{}", APP_VERSION))
-            .enabled(false)
-            .build(app)?;
+    let title = MenuItemBuilder::with_id(
+        "title",
+        format!("MonitorPilot v{} — Larry Gao", APP_VERSION),
+    )
+    .build(app)?;
     builder = builder.item(&title);
 
     builder = builder.separator();
@@ -81,26 +82,11 @@ fn build_tray_menu(
 
     builder = builder.separator();
 
-    let help = SubmenuBuilder::new(app, "帮助");
-    let about = MenuItemBuilder::with_id(
-        "about",
-        format!("MonitorPilot v{}", APP_VERSION),
-    )
-    .enabled(false)
-    .build(app)?;
-    let author = MenuItemBuilder::with_id("author", "by Larry Gao")
-        .enabled(false)
-        .build(app)?;
     let homepage = MenuItemBuilder::with_id("homepage", "访问项目主页").build(app)?;
+    builder = builder.item(&homepage);
+
     let report_issue = MenuItemBuilder::with_id("report_issue", "反馈问题").build(app)?;
-    let help_menu = help
-        .item(&about)
-        .item(&author)
-        .separator()
-        .item(&homepage)
-        .item(&report_issue)
-        .build()?;
-    builder = builder.item(&help_menu);
+    builder = builder.item(&report_issue);
 
     builder = builder.separator();
 
