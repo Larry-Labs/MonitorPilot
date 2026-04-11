@@ -37,7 +37,7 @@ beforeEach(() => {
       case "cmd_save_config":
         return undefined;
       case "cmd_switch_input":
-        return "已切换到 HDMI-1";
+        return { status: "success", message: "已切换到 HDMI-1" };
       default:
         throw new Error(`Unknown command: ${cmd}`);
     }
@@ -135,7 +135,8 @@ describe("App", () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "cmd_get_monitors") return mockMonitorListResult;
       if (cmd === "cmd_get_config") return mockConfig;
-      if (cmd === "cmd_switch_input") return "已发送切换指令，但显示器仍为 DP-1";
+      if (cmd === "cmd_switch_input")
+        return { status: "warning", message: "已发送切换指令到 HDMI-1，但显示器当前仍为 DP-1（目标端口可能无信号）" };
       return undefined;
     });
 
@@ -149,7 +150,7 @@ describe("App", () => {
     await user.click(screen.getByText("HDMI-1"));
 
     await waitFor(() => {
-      expect(screen.getByText(/仍为/)).toBeInTheDocument();
+      expect(screen.getByText(/目标端口可能无信号/)).toBeInTheDocument();
     });
   });
 

@@ -3,7 +3,7 @@ mod monitor;
 mod tray;
 
 use config::{AppConfig, ConfigManager};
-use monitor::{get_monitors, switch_input, MonitorInfo};
+use monitor::{get_monitors, switch_input, MonitorInfo, SwitchResult};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::Manager;
@@ -33,7 +33,7 @@ fn cmd_switch_input(
     app: tauri::AppHandle,
     monitor_index: usize,
     input_value: u8,
-) -> Result<String, String> {
+) -> Result<SwitchResult, String> {
     let result = switch_input(monitor_index, input_value);
     tray::refresh_tray(&app);
     result

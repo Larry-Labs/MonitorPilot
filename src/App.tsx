@@ -4,7 +4,7 @@ import { MonitorCard } from "./components/monitor-card";
 import { MonitorCardSkeleton } from "./components/monitor-card-skeleton";
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
 import { Button } from "./components/ui/button";
-import type { MonitorInfo, MonitorListResult, AppConfig } from "./types/monitor";
+import type { MonitorInfo, MonitorListResult, AppConfig, SwitchResult } from "./types/monitor";
 
 type ToastState = {
   type: "switching" | "success" | "warning" | "error";
@@ -63,6 +63,9 @@ function App() {
     }
   }, []);
 
+  const pollFailCount = useRef(0);
+  const POLL_FAIL_THRESHOLD = 3;
+
   const silentRefresh = useCallback(async () => {
     try {
       const result = await invoke<MonitorListResult>("cmd_get_monitors");
@@ -72,10 +75,16 @@ function App() {
       setMonitors(result.monitors);
       lastMonitorCount.current = result.monitors.length;
       setError(result.error || null);
+      pollFailCount.current = 0;
     } catch (e) {
-      console.warn("轮询检测失败:", e);
+      pollFailCount.current += 1;
+      console.warn(`轮询检测失败 (${pollFailCount.current}/${POLL_FAIL_THRESHOLD}):`, e);
+      if (pollFailCount.current >= POLL_FAIL_THRESHOLD) {
+        showToast({ type: "warning", message: "显示器状态同步异常，数据可能不是最新的" }, 4000);
+        pollFailCount.current = 0;
+      }
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     refreshMonitors();
@@ -124,11 +133,11 @@ function App() {
     switchingRef.current = key;
     showToast({ type: "switching", message: "正在切换输入源..." });
     try {
-      const result = await invoke<string>("cmd_switch_input", { monitorIndex, inputValue });
+      const result = await invoke<SwitchResult>("cmd_switch_input", { monitorIndex, inputValue });
       await silentRefresh();
-      const isWarning = result.includes("仍为");
+      const isWarning = result.status === "warning";
       showToast(
-        { type: isWarning ? "warning" : "success", message: result },
+        { type: isWarning ? "warning" : "success", message: result.message },
         isWarning ? 4000 : 2500
       );
     } catch (e) {

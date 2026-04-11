@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { MonitorInfo, InputSource, MonitorListResult, AppConfig } from "../monitor";
+import type { MonitorInfo, InputSource, MonitorListResult, AppConfig, SwitchResult } from "../monitor";
 
 describe("Type definitions", () => {
   it("MonitorInfo structure matches expected shape", () => {
@@ -62,5 +62,16 @@ describe("Type definitions", () => {
     const input: InputSource = { value: 0x0f, name: "DP-1" };
     expect(input.value).toBe(15);
     expect(input.name).toBe("DP-1");
+  });
+
+  it("SwitchResult success", () => {
+    const result: SwitchResult = { status: "success", message: "已切换到 DP-1" };
+    expect(result.status).toBe("success");
+    expect(result.message).toContain("DP-1");
+  });
+
+  it("SwitchResult warning", () => {
+    const result: SwitchResult = { status: "warning", message: "目标端口可能无信号" };
+    expect(result.status).toBe("warning");
   });
 });

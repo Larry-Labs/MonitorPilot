@@ -158,11 +158,12 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
                     (parts[1].parse::<usize>(), parts[2].parse::<u8>())
                 {
                     match switch_input(monitor_idx, input_val) {
-                        Ok(_) => log::info!(
-                            "托盘切换成功: 显示器 {} → 输入 {}",
-                            monitor_idx,
-                            input_val
-                        ),
+                        Ok(result) if result.status == "warning" => {
+                            log::warn!("托盘切换警告: {}", result.message);
+                        }
+                        Ok(result) => {
+                            log::info!("托盘切换成功: {}", result.message);
+                        }
                         Err(e) => log::error!("托盘切换失败: {}", e),
                     }
                     refresh_tray(app);

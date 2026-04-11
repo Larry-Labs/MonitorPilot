@@ -16,6 +16,11 @@ export interface MonitorListResult {
   error: string | null;
 }
 
+export interface SwitchResult {
+  status: "success" | "warning";
+  message: string;
+}
+
 export interface AppConfig {
   input_names: Record<string, string>;
 }

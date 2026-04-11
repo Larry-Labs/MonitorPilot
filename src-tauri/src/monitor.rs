@@ -4,8 +4,8 @@ use std::sync::{Mutex, OnceLock};
 
 static DDC_LOCK: Mutex<()> = Mutex::new(());
 
-#[cfg(not(target_os = "macos"))]
-const VCP_INPUT_SOURCE: u8 = 0x60; // VESA MCCS Standard - Input Source Select
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+const VCP_INPUT_SOURCE: u8 = 0x60;
 
 const POST_SWITCH_VERIFY_DELAY_MS: u64 = 500;
 
@@ -22,6 +22,12 @@ pub struct MonitorInfo {
     pub current_input: Option<u8>,
     pub current_input_name: String,
     pub supported_inputs: Vec<InputSource>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct SwitchResult {
+    pub status: String,
+    pub message: String,
 }
 
 fn input_name(value: u8) -> String {
@@ -207,7 +213,7 @@ fn macos_get_input(display_num: u32) -> Option<u8> {
 }
 
 #[cfg(target_os = "macos")]
-pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, String> {
+pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResult, String> {
     let _guard = DDC_LOCK
         .lock()
         .map_err(|_| "DDC 操作正忙，请稍后重试".to_string())?;
@@ -269,7 +275,10 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
     match macos_get_input(display_num) {
         Some(actual) if actual == input_value => {
             log::info!("切换成功: 显示器 #{} → {}", display_num, input_name(input_value));
-            Ok(format!("已切换到 {}", input_name(input_value)))
+            Ok(SwitchResult {
+                status: "success".to_string(),
+                message: format!("已切换到 {}", input_name(input_value)),
+            })
         }
         Some(actual) => {
             log::warn!(
@@ -277,11 +286,14 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
                 input_name(input_value),
                 input_name(actual)
             );
-            Ok(format!(
-                "已发送切换指令到 {}，但显示器当前仍为 {}（目标端口可能无信号）",
-                input_name(input_value),
-                input_name(actual)
-            ))
+            Ok(SwitchResult {
+                status: "warning".to_string(),
+                message: format!(
+                    "已发送切换指令到 {}，但显示器当前仍为 {}（目标端口可能无信号）",
+                    input_name(input_value),
+                    input_name(actual)
+                ),
+            })
         }
         None => {
             log::warn!(
@@ -327,7 +339,7 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
 
 // --- Linux/Windows: use ddc-hi ---
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
     use ddc_hi::{Ddc, Display};
 
@@ -355,7 +367,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
         };
 
         let current_input_name = current_input
-            .map(|v| input_name(v))
+            .map(input_name)
             .unwrap_or_else(|| "未知".to_string());
 
         log::info!("检测到显示器: #{} {} | 当前输入: {}", i, model, current_input_name);
@@ -373,19 +385,13 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
     Ok(monitors)
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, String> {
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResult, String> {
     use ddc_hi::{Ddc, Display};
 
     let _guard = DDC_LOCK
         .lock()
         .map_err(|_| "DDC 操作正忙，请稍后重试".to_string())?;
-
-    log::info!(
-        "切换请求: 显示器 #{} → {}",
-        monitor_index,
-        input_name(input_value)
-    );
 
     let displays = Display::enumerate();
     let mut display = displays
@@ -396,6 +402,21 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
             format!("未找到 Monitor {}", monitor_index)
         })?;
 
+    let previous_input = display
+        .handle
+        .get_vcp_feature(VCP_INPUT_SOURCE)
+        .ok()
+        .map(|v| v.value() as u8);
+
+    log::info!(
+        "切换请求: 显示器 #{} | {} → {}",
+        monitor_index,
+        previous_input
+            .map(input_name)
+            .unwrap_or_else(|| "未知".to_string()),
+        input_name(input_value)
+    );
+
     display
         .handle
         .set_vcp_feature(VCP_INPUT_SOURCE, input_value as u16)
@@ -404,8 +425,61 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
             format!("切换失败: {}", e)
         })?;
 
-    log::info!("切换成功: 显示器 #{} → {}", monitor_index, input_name(input_value));
-    Ok(format!("已切换到 {}", input_name(input_value)))
+    log::debug!("切换命令已发送，等待 {}ms 验证...", POST_SWITCH_VERIFY_DELAY_MS);
+    std::thread::sleep(std::time::Duration::from_millis(POST_SWITCH_VERIFY_DELAY_MS));
+
+    match display.handle.get_vcp_feature(VCP_INPUT_SOURCE) {
+        Ok(v) if v.value() as u8 == input_value => {
+            log::info!("切换成功: 显示器 #{} → {}", monitor_index, input_name(input_value));
+            Ok(SwitchResult {
+                status: "success".to_string(),
+                message: format!("已切换到 {}", input_name(input_value)),
+            })
+        }
+        Ok(v) => {
+            let actual = v.value() as u8;
+            log::warn!(
+                "切换未生效: 目标 {} 实际 {} — 目标端口可能无信号",
+                input_name(input_value),
+                input_name(actual)
+            );
+            Ok(SwitchResult {
+                status: "warning".to_string(),
+                message: format!(
+                    "已发送切换指令到 {}，但显示器当前仍为 {}（目标端口可能无信号）",
+                    input_name(input_value),
+                    input_name(actual)
+                ),
+            })
+        }
+        Err(_) => {
+            log::warn!(
+                "切换后显示器不可达，尝试回滚到 {:?}",
+                previous_input.map(input_name)
+            );
+            if let Some(prev) = previous_input {
+                let _ = display
+                    .handle
+                    .set_vcp_feature(VCP_INPUT_SOURCE, prev as u16);
+                std::thread::sleep(std::time::Duration::from_millis(POST_SWITCH_VERIFY_DELAY_MS));
+                if let Ok(v) = display.handle.get_vcp_feature(VCP_INPUT_SOURCE) {
+                    if v.value() as u8 == prev {
+                        log::info!("回滚成功: 已恢复到 {}", input_name(prev));
+                        return Err(format!(
+                            "切换到 {} 后显示器失联，已自动恢复到 {}",
+                            input_name(input_value),
+                            input_name(prev)
+                        ));
+                    }
+                }
+                log::warn!("回滚命令已发送但无法确认结果");
+            }
+            Err(format!(
+                "切换到 {} 后显示器失联（DDC/CI 通信中断），请检查线缆连接",
+                input_name(input_value)
+            ))
+        }
+    }
 }
 
 #[cfg(test)]
