@@ -29,9 +29,17 @@ impl ConfigManager {
         let config = Self::load_from_file(&config_path).unwrap_or_else(|| {
             if config_path.exists() {
                 log::warn!("配置文件 {} 解析失败，使用默认配置", config_path.display());
+            } else {
+                log::debug!("配置文件不存在，使用默认配置: {}", config_path.display());
             }
             AppConfig::default()
         });
+
+        log::info!(
+            "配置已加载: {} 个自定义名称 | 路径: {}",
+            config.input_names.len(),
+            config_path.display()
+        );
 
         Self {
             config: Mutex::new(config),

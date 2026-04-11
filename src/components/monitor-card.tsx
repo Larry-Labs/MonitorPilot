@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { Card, CardContent, CardHeader } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -13,7 +13,7 @@ interface MonitorCardProps {
   onRename: (key: string, name: string) => void;
 }
 
-export function MonitorCard({ monitor, switching, customNames, onSwitch, onRename }: MonitorCardProps) {
+export const MonitorCard = memo(function MonitorCard({ monitor, switching, customNames, onSwitch, onRename }: MonitorCardProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
@@ -55,14 +55,14 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
                 <line x1="12" x2="12" y1="17" y2="21" />
               </svg>
             </div>
-            <div>
-              <p className="text-sm font-semibold leading-tight">{monitor.model}</p>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold leading-tight truncate" title={monitor.model}>{monitor.model}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">#{monitor.index}</p>
             </div>
           </div>
-          <Badge className="text-[11px] font-medium bg-primary/10 text-primary hover:bg-primary/15 border-primary/15 gap-1.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            {activeDisplayName}
+          <Badge className="text-[11px] font-medium bg-primary/10 text-primary hover:bg-primary/15 border-primary/15 gap-1.5 shrink-0 max-w-[140px]">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <span className="truncate" title={activeDisplayName}>{activeDisplayName}</span>
           </Badge>
         </div>
       </CardHeader>
@@ -103,6 +103,8 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
                 <Button
                   variant={isActive ? "default" : "outline"}
                   size="sm"
+                  aria-pressed={isActive}
+                  aria-label={isActive ? `${displayName}（当前输入源）` : `切换到 ${displayName}`}
                   className={`w-full text-xs h-10 transition-all duration-200 font-medium ${
                     isActive
                       ? "shadow-md shadow-primary/20"
@@ -134,7 +136,7 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
                   )}
                 </Button>
                 <button
-                  className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-primary hover:border-primary/40 transition-all duration-150"
+                  className="absolute -top-1.5 -right-1.5 flex items-center justify-center w-5 h-5 rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-primary hover:border-primary/40 transition-all duration-150 opacity-0 group-hover:opacity-100 focus:opacity-100"
                   onClick={(e) => {
                     e.stopPropagation();
                     startEditing(input);
@@ -153,4 +155,4 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
       </CardContent>
     </Card>
   );
-}
+});

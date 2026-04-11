@@ -146,3 +146,35 @@ The system SHALL display content without scrollbars when the window is small.
 - **WHEN** the application window is resized to a small size
 - **THEN** the content SHALL be fully visible without horizontal or vertical scrollbars
 - **AND** the main content area SHALL use overflow-y-auto with hidden scrollbar styling
+
+### Requirement: MonitorCard performance optimization
+The system SHALL minimize unnecessary re-renders of MonitorCard components.
+
+#### Scenario: Input switch on one monitor
+- **WHEN** the user switches input on monitor A while monitor B is also displayed
+- **THEN** only monitor A's card SHALL re-render; monitor B SHALL be skipped via `React.memo` shallow comparison
+
+### Requirement: Input button accessibility
+The system SHALL provide accessible labels for input source buttons.
+
+#### Scenario: Active input button
+- **WHEN** a button represents the currently active input source
+- **THEN** the button SHALL have `aria-pressed="true"` and an `aria-label` indicating it is the current source
+
+#### Scenario: Inactive input button
+- **WHEN** a button represents a non-active input source
+- **THEN** the button SHALL have `aria-pressed="false"` and an `aria-label` indicating "切换到 {name}"
+
+### Requirement: Edit button keyboard accessibility
+The system SHALL ensure the edit (rename) button is keyboard-accessible.
+
+#### Scenario: Tab navigation
+- **WHEN** the user navigates using Tab key
+- **THEN** the edit button SHALL be focusable and visible on focus (via opacity transition, not display:none)
+
+### Requirement: Long name truncation
+The system SHALL truncate long monitor model names and input display names.
+
+#### Scenario: Long monitor name
+- **WHEN** a monitor model name exceeds the available width
+- **THEN** the name SHALL be truncated with ellipsis and a `title` attribute for full text on hover

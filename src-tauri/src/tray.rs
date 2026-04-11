@@ -28,6 +28,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         })
         .build(app)?;
 
+    log::info!("系统托盘初始化完成");
     Ok(())
 }
 
@@ -83,14 +84,18 @@ fn build_tray_menu(
     let help = SubmenuBuilder::new(app, "帮助");
     let about = MenuItemBuilder::with_id(
         "about",
-        format!("关于 MonitorPilot v{}", APP_VERSION),
+        format!("MonitorPilot v{}", APP_VERSION),
     )
     .enabled(false)
     .build(app)?;
+    let author = MenuItemBuilder::with_id("author", "by Larry Gao")
+        .enabled(false)
+        .build(app)?;
     let homepage = MenuItemBuilder::with_id("homepage", "访问项目主页").build(app)?;
     let report_issue = MenuItemBuilder::with_id("report_issue", "反馈问题").build(app)?;
     let help_menu = help
         .item(&about)
+        .item(&author)
         .separator()
         .item(&homepage)
         .item(&report_issue)

@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::process::Command;
+use std::sync::OnceLock;
 
 #[cfg(not(target_os = "macos"))]
 const VCP_INPUT_SOURCE: u8 = 0x60;
@@ -63,16 +64,23 @@ fn supported_inputs_with_current(current: Option<u8>) -> Vec<InputSource> {
 // --- macOS: use m1ddc CLI ---
 
 #[cfg(target_os = "macos")]
-fn find_m1ddc() -> String {
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            let sidecar = dir.join("m1ddc");
-            if sidecar.exists() {
-                return sidecar.to_string_lossy().to_string();
+static M1DDC_PATH: OnceLock<String> = OnceLock::new();
+
+#[cfg(target_os = "macos")]
+fn find_m1ddc() -> &'static str {
+    M1DDC_PATH.get_or_init(|| {
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                let sidecar = dir.join("m1ddc");
+                if sidecar.exists() {
+                    log::info!("使用内置 m1ddc: {}", sidecar.display());
+                    return sidecar.to_string_lossy().to_string();
+                }
             }
         }
-    }
-    "m1ddc".to_string()
+        log::info!("使用系统 PATH 中的 m1ddc");
+        "m1ddc".to_string()
+    })
 }
 
 #[cfg(target_os = "macos")]
@@ -143,7 +151,11 @@ fn parse_m1ddc_line(line: &str) -> (u32, String) {
 
     if let Some(stripped) = line.strip_prefix('[') {
         if let Some(bracket_end) = stripped.find(']') {
-            display_num = stripped[..bracket_end].trim().parse().unwrap_or(1);
+            let num_str = stripped[..bracket_end].trim();
+            display_num = num_str.parse().unwrap_or_else(|_| {
+                log::warn!("m1ddc 显示器编号解析失败: {:?}，使用默认值 1", num_str);
+                1
+            });
             rest = stripped[bracket_end + 1..].trim();
         } else {
             rest = line;
@@ -178,11 +190,16 @@ fn macos_get_input(display_num: u32) -> Option<u8> {
         .ok()?;
 
     if !output.status.success() {
+        log::debug!("读取显示器 #{} 输入失败: 退出码 {}", display_num, output.status);
         return None;
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    stdout.trim().parse::<u8>().ok()
+    let value = stdout.trim().parse::<u8>().ok();
+    if value.is_none() {
+        log::debug!("解析显示器 #{} 输入值失败: {:?}", display_num, stdout.trim());
+    }
+    value
 }
 
 #[cfg(target_os = "macos")]
@@ -306,6 +323,7 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
 pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
     use ddc_hi::{Ddc, Display};
 
+    log::debug!("正在枚举 DDC/CI 显示器 (ddc-hi)...");
     let displays = Display::enumerate();
     let mut monitors = Vec::new();
 
@@ -316,15 +334,23 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
             .clone()
             .unwrap_or_else(|| format!("Monitor {}", i + 1));
 
-        let current_input = display
-            .handle
-            .get_vcp_feature(VCP_INPUT_SOURCE)
-            .ok()
-            .map(|v| v.value() as u8);
+        let current_input = match display.handle.get_vcp_feature(VCP_INPUT_SOURCE) {
+            Ok(v) => {
+                let val = v.value() as u8;
+                log::debug!("显示器 #{} 当前输入: 0x{:02X}", i, val);
+                Some(val)
+            }
+            Err(e) => {
+                log::debug!("读取显示器 #{} 输入失败: {}", i, e);
+                None
+            }
+        };
 
         let current_input_name = current_input
             .map(|v| input_name(v))
             .unwrap_or_else(|| "未知".to_string());
+
+        log::info!("检测到显示器: #{} {} | 当前输入: {}", i, model, current_input_name);
 
         monitors.push(MonitorInfo {
             index: i,
@@ -335,6 +361,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
         });
     }
 
+    log::info!("共检测到 {} 台显示器", monitors.len());
     Ok(monitors)
 }
 
@@ -342,16 +369,29 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
 pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, String> {
     use ddc_hi::{Ddc, Display};
 
+    log::info!(
+        "切换请求: 显示器 #{} → {}",
+        monitor_index,
+        input_name(input_value)
+    );
+
     let displays = Display::enumerate();
     let mut display = displays
         .into_iter()
         .nth(monitor_index)
-        .ok_or_else(|| format!("未找到 Monitor {}", monitor_index))?;
+        .ok_or_else(|| {
+            log::error!("未找到显示器 #{}", monitor_index);
+            format!("未找到 Monitor {}", monitor_index)
+        })?;
 
     display
         .handle
         .set_vcp_feature(VCP_INPUT_SOURCE, input_value as u16)
-        .map_err(|e| format!("切换失败: {}", e))?;
+        .map_err(|e| {
+            log::error!("切换失败: 显示器 #{} → {} | {}", monitor_index, input_name(input_value), e);
+            format!("切换失败: {}", e)
+        })?;
 
+    log::info!("切换成功: 显示器 #{} → {}", monitor_index, input_name(input_value));
     Ok(format!("已切换到 {}", input_name(input_value)))
 }

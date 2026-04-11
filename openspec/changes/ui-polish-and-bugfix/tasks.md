@@ -122,3 +122,19 @@
 - [x] 17.1 运行 `cargo check` 确认后端无警告
 - [x] 17.2 运行 `npm run tauri build` 确认构建成功
 - [x] 17.3 TypeScript 编译检查通过
+
+## 18. 代码审查修复（10 轮深度审查）
+
+- [x] 18.1 lib.rs: 添加 DDC_LOCK 互斥锁，保证后端 DDC 操作串行化
+- [x] 18.2 tauri.conf.json: 设置 CSP 安全策略（替代 `csp: null`）
+- [x] 18.3 Cargo.toml: `ddc-hi` 改为条件依赖，仅 Linux/Windows 编译
+- [x] 18.4 monitor.rs: `find_m1ddc()` 使用 OnceLock 缓存路径，避免重复查找
+- [x] 18.5 monitor.rs: `parse_m1ddc_line` 解析失败时 log::warn 而非静默默认值
+- [x] 18.6 App.tsx: `TOAST_COLORS` 常量移至组件外部，避免每次渲染重建
+- [x] 18.7 App.tsx: `handleSwitch` / `handleRename` 包装为 `useCallback`，减少子组件重渲染
+- [x] 18.8 App.tsx: 使用 `customNamesRef` 避免 `handleRename` 对 `customNames` 状态的闭包依赖
+- [x] 18.9 monitor-card.tsx: 使用 `React.memo` 包装组件，配合 `useCallback` 优化性能
+- [x] 18.10 monitor-card.tsx: 添加 `aria-pressed` 和 `aria-label` 提升可访问性
+- [x] 18.11 monitor-card.tsx: 编辑按钮从 `hidden` 改为 `opacity` 方案，保持 Tab 可聚焦
+- [x] 18.12 monitor-card.tsx: 长名称添加 `truncate` + `title` 属性防止溢出
+- [x] 18.13 tray.rs: 帮助子菜单 About 添加 "by Larry Gao" 作者信息

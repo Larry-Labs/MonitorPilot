@@ -5,8 +5,10 @@ mod tray;
 use config::{AppConfig, ConfigManager};
 use monitor::{get_monitors, switch_input, MonitorInfo};
 use serde::Serialize;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
+
+static DDC_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Serialize)]
 struct MonitorListResult {
@@ -34,7 +36,9 @@ fn cmd_switch_input(
     monitor_index: usize,
     input_value: u8,
 ) -> Result<String, String> {
+    let _guard = DDC_LOCK.lock().map_err(|_| "DDC 操作正忙，请稍后重试".to_string())?;
     let result = switch_input(monitor_index, input_value);
+    drop(_guard);
     tray::refresh_tray(&app);
     result
 }
@@ -49,7 +53,11 @@ fn cmd_save_config(
     state: tauri::State<'_, Arc<ConfigManager>>,
     config: AppConfig,
 ) -> Result<(), String> {
-    state.save(config)
+    let result = state.save(config);
+    if result.is_ok() {
+        log::debug!("配置已保存");
+    }
+    result
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -74,10 +82,18 @@ pub fn run() {
                     .build(),
             )?;
 
+            log::info!(
+                "MonitorPilot v{} 启动 | {} | {}",
+                env!("CARGO_PKG_VERSION"),
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            );
+
             let app_data_dir = app
                 .path()
                 .app_data_dir()
                 .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
+            log::info!("配置目录: {}", app_data_dir.display());
             let config_manager = Arc::new(ConfigManager::new(app_data_dir));
             app.manage(config_manager);
 

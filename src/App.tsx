@@ -11,6 +11,13 @@ type ToastState = {
   message: string;
 } | null;
 
+const TOAST_COLORS = {
+  switching: "bg-primary/5 text-primary border-primary/15",
+  success: "bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/15",
+  warning: "bg-amber-500/5 text-amber-600 dark:text-amber-400 border-amber-500/15",
+  error: "bg-destructive/5 text-destructive border-destructive/15",
+} as const;
+
 function App() {
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +29,8 @@ function App() {
   const switchLock = useRef(false);
   const switchingRef = useRef<string | null>(null);
   const lastMonitorCount = useRef(0);
+  const customNamesRef = useRef(customNames);
+  customNamesRef.current = customNames;
 
   const showToast = useCallback((state: NonNullable<ToastState>, duration?: number) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -103,7 +112,7 @@ function App() {
     };
   }, [silentRefresh]);
 
-  const handleSwitch = async (monitorIndex: number, inputValue: number) => {
+  const handleSwitch = useCallback(async (monitorIndex: number, inputValue: number) => {
     if (switchLock.current) return;
     switchLock.current = true;
 
@@ -126,11 +135,11 @@ function App() {
       switchingRef.current = null;
       setSwitching(null);
     }
-  };
+  }, [showToast, silentRefresh]);
 
-  const handleRename = async (key: string, name: string) => {
-    const previous = { ...customNames };
-    const updated = { ...customNames };
+  const handleRename = useCallback(async (key: string, name: string) => {
+    const previous = { ...customNamesRef.current };
+    const updated = { ...customNamesRef.current };
     if (name) {
       updated[key] = name;
     } else {
@@ -144,14 +153,7 @@ function App() {
       setCustomNames(previous);
       showToast({ type: "error", message: String(e) }, 3000);
     }
-  };
-
-  const toastColors = {
-    switching: "bg-primary/5 text-primary border-primary/15",
-    success: "bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/15",
-    warning: "bg-amber-500/5 text-amber-600 dark:text-amber-400 border-amber-500/15",
-    error: "bg-destructive/5 text-destructive border-destructive/15",
-  };
+  }, [showToast]);
 
   return (
     <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
@@ -276,7 +278,7 @@ function App() {
         <div
           role="status"
           aria-live="polite"
-          className={`mx-4 mb-2 px-3.5 py-2.5 rounded-lg text-xs font-medium flex items-center gap-2.5 border ${toastColors[toast.type]}`}
+          className={`mx-4 mb-2 px-3.5 py-2.5 rounded-lg text-xs font-medium flex items-center gap-2.5 border ${TOAST_COLORS[toast.type]}`}
         >
           {toast.type === "switching" && (
             <svg className="animate-spin h-3.5 w-3.5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

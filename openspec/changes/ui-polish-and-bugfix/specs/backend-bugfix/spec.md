@@ -129,3 +129,38 @@ The system SHALL log all DDC/CI operations for debugging.
 #### Scenario: Input switching
 - **WHEN** `switch_input` executes
 - **THEN** the system SHALL log: switch request (from/to), command result, verification result, rollback attempts if any
+
+### Requirement: Backend DDC operation mutex
+The system SHALL serialize all DDC/CI operations at the backend level.
+
+#### Scenario: Concurrent switch from frontend and tray
+- **WHEN** a switch command is invoked while another is in progress (from any source: frontend, tray)
+- **THEN** the second command SHALL block until the first completes, preventing DDC bus conflicts
+
+### Requirement: Content Security Policy
+The system SHALL enforce a strict CSP in `tauri.conf.json`.
+
+#### Scenario: CSP enforcement
+- **WHEN** the application loads frontend content
+- **THEN** only `self`, `asset:`, and `https://asset.localhost` sources SHALL be allowed; inline styles (`'unsafe-inline'`) SHALL be permitted for Tailwind compatibility
+
+### Requirement: Conditional ddc-hi dependency
+The system SHALL only compile `ddc-hi` crate on Linux and Windows.
+
+#### Scenario: macOS build
+- **WHEN** the application is built for macOS
+- **THEN** `ddc-hi` SHALL NOT be compiled, reducing build time and binary size
+
+### Requirement: m1ddc path caching
+The system SHALL cache the resolved m1ddc binary path using `OnceLock`.
+
+#### Scenario: Multiple invocations
+- **WHEN** `find_m1ddc()` is called multiple times during the application lifecycle
+- **THEN** the path SHALL be resolved only once and cached for subsequent calls
+
+### Requirement: Tray author information
+The system SHALL display author information in the tray help submenu.
+
+#### Scenario: About item content
+- **WHEN** the user views the "关于 MonitorPilot" item in the tray help submenu
+- **THEN** it SHALL display version information and "by Larry Gao" as the author
