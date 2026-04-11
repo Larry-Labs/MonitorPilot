@@ -1,10 +1,14 @@
+use std::sync::Arc;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder},
     tray::TrayIconBuilder,
     AppHandle, Manager,
 };
 
+use crate::config::ConfigManager;
 use crate::monitor::{get_monitors, switch_input};
+
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let menu = build_tray_menu(app)?;
@@ -27,21 +31,36 @@ fn build_tray_menu(
 ) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn std::error::Error>> {
     let mut builder = MenuBuilder::new(app);
 
+    let title = MenuItemBuilder::with_id(
+        "title",
+        format!("MonitorPilot v{}", APP_VERSION),
+    )
+    .enabled(false)
+    .build(app)?;
+    builder = builder.item(&title);
+
+    builder = builder.separator();
+
+    let custom_names = app
+        .try_state::<Arc<ConfigManager>>()
+        .map(|cm| cm.get().input_names)
+        .unwrap_or_default();
+
     match get_monitors() {
         Ok(monitors) if !monitors.is_empty() => {
             for monitor in &monitors {
-                let submenu = build_monitor_submenu(app, monitor)?;
+                let submenu = build_monitor_submenu(app, monitor, &custom_names)?;
                 builder = builder.item(&submenu);
             }
         }
         Ok(_) => {
-            let item = MenuItemBuilder::with_id("no_monitors", "未检测到显示器")
+            let item = MenuItemBuilder::with_id("no_monitors", "未检测到 DDC/CI 显示器")
                 .enabled(false)
                 .build(app)?;
             builder = builder.item(&item);
         }
         Err(e) => {
-            let item = MenuItemBuilder::with_id("error", format!("错误: {}", e))
+            let item = MenuItemBuilder::with_id("error", format!("检测异常: {}", e))
                 .enabled(false)
                 .build(app)?;
             builder = builder.item(&item);
@@ -50,15 +69,23 @@ fn build_tray_menu(
 
     builder = builder.separator();
 
-    let refresh = MenuItemBuilder::with_id("refresh", "刷新显示器列表").build(app)?;
+    let refresh = MenuItemBuilder::with_id("refresh", "🔄  刷新显示器列表").build(app)?;
     builder = builder.item(&refresh);
 
-    let settings = MenuItemBuilder::with_id("settings", "设置...").build(app)?;
+    let settings = MenuItemBuilder::with_id("settings", "⚙️  打开主界面").build(app)?;
     builder = builder.item(&settings);
 
     builder = builder.separator();
 
-    let quit = MenuItemBuilder::with_id("quit", "退出 MonitorPilot").build(app)?;
+    let about = MenuItemBuilder::with_id(
+        "about",
+        format!("关于 MonitorPilot v{}", APP_VERSION),
+    )
+    .enabled(false)
+    .build(app)?;
+    builder = builder.item(&about);
+
+    let quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;
     builder = builder.item(&quit);
 
     Ok(builder.build()?)
@@ -67,16 +94,19 @@ fn build_tray_menu(
 fn build_monitor_submenu(
     app: &AppHandle,
     monitor: &crate::monitor::MonitorInfo,
+    custom_names: &std::collections::HashMap<String, String>,
 ) -> Result<tauri::menu::Submenu<tauri::Wry>, Box<dyn std::error::Error>> {
-    let mut submenu = SubmenuBuilder::new(app, &monitor.model);
+    let mut submenu = SubmenuBuilder::new(app, format!("🖥  {}", &monitor.model));
 
     for input in &monitor.supported_inputs {
         let is_active = monitor.current_input == Some(input.value);
         let item_id = format!("switch_{}_{}", monitor.index, input.value);
+        let key = format!("{}-{}", monitor.index, input.value);
+        let display_name = custom_names.get(&key).unwrap_or(&input.name);
         let label = if is_active {
-            format!("✓ {}", input.name)
+            format!("✓  {}", display_name)
         } else {
-            format!("   {}", input.name)
+            format!("    {}", display_name)
         };
 
         let item = MenuItemBuilder::with_id(item_id, label)
@@ -109,9 +139,11 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
                     (parts[1].parse::<usize>(), parts[2].parse::<u8>())
                 {
                     match switch_input(monitor_idx, input_val) {
-                        Ok(_) => {
-                            log::info!("托盘切换成功: 显示器 {} → 输入 {}", monitor_idx, input_val)
-                        }
+                        Ok(_) => log::info!(
+                            "托盘切换成功: 显示器 {} → 输入 {}",
+                            monitor_idx,
+                            input_val
+                        ),
                         Err(e) => log::error!("托盘切换失败: {}", e),
                     }
                     refresh_tray(app);

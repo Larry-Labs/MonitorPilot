@@ -26,13 +26,34 @@
 - [x] 5.3 重做空状态：使用图标 + 描述 + 操作建议的结构化布局
 - [x] 5.4 为输入源添加显式编辑按钮图标，替代仅双击触发重命名
 - [x] 5.5 将输入源网格从固定 `grid-cols-3` 改为响应式布局
+- [x] 5.6 主题色从纯灰替换为蓝紫色品牌色方案
+- [x] 5.7 功能提示面板改为仅首次启动显示
 
 ## 6. 项目合规
 
 - [x] 6.1 在根目录创建 MIT LICENSE 文件
 - [x] 6.2 确认 `package-lock.json` 已纳入 Git 跟踪
 
-## 7. 构建验证
+## 7. m1ddc 打包
 
-- [x] 7.1 运行 `cargo check` 确认后端无警告
-- [x] 7.2 运行 `npm run tauri build` 确认构建成功
+- [x] 7.1 将 m1ddc 二进制通过 Tauri externalBin 打包进 app
+- [x] 7.2 运行时优先使用 sidecar 路径，fallback 到系统 PATH
+
+## 8. 错误处理优化
+
+- [x] 8.1 修复 m1ddc 错误信息在 stdout 而非 stderr 的问题
+- [x] 8.2 过滤内置显示器（不支持 DDC/CI）
+- [x] 8.3 添加 m1ddc display list 退出码检查
+
+## 9. 托盘菜单完善
+
+- [x] 9.1 顶部添加 "MonitorPilot vX.X.X" 标题
+- [x] 9.2 托盘菜单中使用自定义名称（从 config 读取）
+- [x] 9.3 添加 "关于" 菜单项
+- [x] 9.4 菜单项添加 emoji 图标提升辨识度
+- [x] 9.5 版本号通过 CARGO_PKG_VERSION 自动获取
+
+## 10. 构建验证
+
+- [x] 10.1 运行 `cargo check` 确认后端无警告
+- [x] 10.2 运行 `npm run tauri build` 确认构建成功
