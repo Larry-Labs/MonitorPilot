@@ -35,9 +35,7 @@ fn cmd_switch_input(
     input_value: u8,
 ) -> Result<String, String> {
     let result = switch_input(monitor_index, input_value);
-    if result.is_ok() {
-        tray::refresh_tray(&app);
-    }
+    tray::refresh_tray(&app);
     result
 }
 
@@ -64,7 +62,6 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             let log_level = if cfg!(debug_assertions) {
                 log::LevelFilter::Debug

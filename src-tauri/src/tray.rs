@@ -147,10 +147,14 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
             refresh_tray(app);
         }
         "homepage" => {
-            let _ = open::that("https://github.com/Larry-Labs/MonitorPilot");
+            if let Err(e) = open::that("https://github.com/Larry-Labs/MonitorPilot") {
+                log::error!("打开项目主页失败: {}", e);
+            }
         }
         "report_issue" => {
-            let _ = open::that("https://github.com/Larry-Labs/MonitorPilot/issues");
+            if let Err(e) = open::that("https://github.com/Larry-Labs/MonitorPilot/issues") {
+                log::error!("打开反馈页面失败: {}", e);
+            }
         }
         id if id.starts_with("switch_") => {
             let parts: Vec<&str> = id.split('_').collect();
@@ -167,7 +171,11 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
                         Err(e) => log::error!("托盘切换失败: {}", e),
                     }
                     refresh_tray(app);
+                } else {
+                    log::warn!("托盘菜单 ID 解析失败: {}", id);
                 }
+            } else {
+                log::warn!("托盘菜单 ID 格式异常: {}", id);
             }
         }
         _ => {}

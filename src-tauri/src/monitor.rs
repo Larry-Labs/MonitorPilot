@@ -1,4 +1,3 @@
-use log;
 use serde::Serialize;
 use std::process::Command;
 

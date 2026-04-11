@@ -26,7 +26,12 @@ pub struct ConfigManager {
 impl ConfigManager {
     pub fn new(app_data_dir: PathBuf) -> Self {
         let config_path = app_data_dir.join("config.json");
-        let config = Self::load_from_file(&config_path).unwrap_or_default();
+        let config = Self::load_from_file(&config_path).unwrap_or_else(|| {
+            if config_path.exists() {
+                log::warn!("配置文件 {} 解析失败，使用默认配置", config_path.display());
+            }
+            AppConfig::default()
+        });
 
         Self {
             config: Mutex::new(config),
@@ -40,7 +45,13 @@ impl ConfigManager {
     }
 
     pub fn get(&self) -> AppConfig {
-        self.config.lock().unwrap().clone()
+        self.config
+            .lock()
+            .unwrap_or_else(|e| {
+                log::error!("配置 Mutex 被污染，使用恢复值: {}", e);
+                e.into_inner()
+            })
+            .clone()
     }
 
     pub fn save(&self, config: AppConfig) -> Result<(), String> {
@@ -53,7 +64,12 @@ impl ConfigManager {
 
         fs::write(&self.config_path, json).map_err(|e| format!("写入配置文件失败: {}", e))?;
 
-        *self.config.lock().unwrap() = config;
+        *self.config
+            .lock()
+            .unwrap_or_else(|e| {
+                log::error!("配置 Mutex 被污染，使用恢复值: {}", e);
+                e.into_inner()
+            }) = config;
         Ok(())
     }
 }

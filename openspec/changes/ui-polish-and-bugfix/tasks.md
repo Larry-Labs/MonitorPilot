@@ -101,8 +101,24 @@
 - [x] 15.2 monitor.rs 切换流程日志（切换请求、命令结果、验证结果、回滚过程）
 - [x] 15.3 日志级别：debug 用于详细输出，info 用于关键事件，warn/error 用于异常
 
-## 16. 构建验证
+## 16. 代码审查修复（第4轮）
 
-- [x] 16.1 运行 `cargo check` 确认后端无警告
-- [x] 16.2 运行 `npm run tauri build` 确认构建成功
-- [x] 16.3 TypeScript 编译检查通过
+- [x] 16.1 lib.rs: `cmd_switch_input` 无论成功失败都刷新托盘（修复"托盘刷新不及时"）
+- [x] 16.2 lib.rs: 移除未使用的 `tauri_plugin_fs::init()`
+- [x] 16.3 Cargo.toml: 移除 `tauri-plugin-fs` 依赖
+- [x] 16.4 capabilities: 移除未使用的 `fs:default` 权限
+- [x] 16.5 App.tsx: toast timer 卸载时清理，防止内存泄漏
+- [x] 16.6 App.tsx: 轮询 effect 使用 `switchingRef` 避免 `switching` 变化重建 interval
+- [x] 16.7 App.tsx: `silentRefresh` catch 添加日志输出
+- [x] 16.8 App.tsx: Toast 容器添加 `role="status"` + `aria-live="polite"`
+- [x] 16.9 monitor.rs: 移除多余的 `use log;` 导入
+- [x] 16.10 config.rs: Mutex `lock().unwrap()` → `unwrap_or_else` 恢复被污染的锁
+- [x] 16.11 config.rs: 配置文件解析失败时记录 `log::warn`
+- [x] 16.12 tray.rs: `open::that` 错误记录日志
+- [x] 16.13 tray.rs: 菜单 ID 解析失败记录日志
+
+## 17. 构建验证
+
+- [x] 17.1 运行 `cargo check` 确认后端无警告
+- [x] 17.2 运行 `npm run tauri build` 确认构建成功
+- [x] 17.3 TypeScript 编译检查通过

@@ -20,6 +20,7 @@ function App() {
   const [toast, setToast] = useState<ToastState>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const switchLock = useRef(false);
+  const switchingRef = useRef<string | null>(null);
   const lastMonitorCount = useRef(0);
 
   const showToast = useCallback((state: NonNullable<ToastState>, duration?: number) => {
@@ -28,6 +29,12 @@ function App() {
     if (duration) {
       toastTimer.current = setTimeout(() => setToast(null), duration);
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
   }, []);
 
   const refreshMonitors = useCallback(async () => {
@@ -56,8 +63,8 @@ function App() {
       setMonitors(result.monitors);
       lastMonitorCount.current = result.monitors.length;
       setError(result.error || null);
-    } catch {
-      // silent
+    } catch (e) {
+      console.warn("轮询检测失败:", e);
     }
   }, []);
 
@@ -78,7 +85,7 @@ function App() {
 
     const startPolling = () => {
       timer = setInterval(() => {
-        if (!switching) silentRefresh();
+        if (!switchingRef.current) silentRefresh();
       }, POLL_INTERVAL);
     };
 
@@ -94,7 +101,7 @@ function App() {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [silentRefresh, switching]);
+  }, [silentRefresh]);
 
   const handleSwitch = async (monitorIndex: number, inputValue: number) => {
     if (switchLock.current) return;
@@ -102,6 +109,7 @@ function App() {
 
     const key = `${monitorIndex}-${inputValue}`;
     setSwitching(key);
+    switchingRef.current = key;
     showToast({ type: "switching", message: "正在切换输入源..." });
     try {
       const result = await invoke<string>("cmd_switch_input", { monitorIndex, inputValue });
@@ -115,6 +123,7 @@ function App() {
       showToast({ type: "error", message: String(e) }, 4000);
     } finally {
       switchLock.current = false;
+      switchingRef.current = null;
       setSwitching(null);
     }
   };
@@ -265,6 +274,8 @@ function App() {
 
       {toast && (
         <div
+          role="status"
+          aria-live="polite"
           className={`mx-4 mb-2 px-3.5 py-2.5 rounded-lg text-xs font-medium flex items-center gap-2.5 border ${toastColors[toast.type]}`}
         >
           {toast.type === "switching" && (
