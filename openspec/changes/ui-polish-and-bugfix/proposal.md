@@ -18,7 +18,7 @@
 - 将 m1ddc 二进制通过 Tauri externalBin 打包进 app（macOS 用户零配置）
 - 修复 m1ddc 错误信息捕获（stdout vs stderr）
 - 过滤内置 MacBook 显示器（不支持 DDC/CI 切换）
-- 完善托盘菜单：版本标题、自定义名称、帮助子菜单（关于/主页/反馈）、移除 emoji
+- 完善托盘菜单：扁平化结构（版本+作者标题、自定义名称、主页/反馈直接置顶级菜单）、移除 emoji
 - 实现 Toast 通知系统：底部提示条，区分切换中/成功/警告/失败四种状态
 - 实现热插拔检测：5s 定时轮询 + 窗口可见性控制 + 切换期间暂停
 - 实现当前输入标记：活跃输入按钮显示绿色脉冲圆点 + "当前"标签
@@ -34,7 +34,7 @@
 
 - `ui-polish`: 前端界面美化与交互优化（加载态、暗色模式、空状态、响应式布局、编辑按钮、品牌色）
 - `backend-bugfix`: 后端 bug 修复与代码清理（托盘 id、死代码、错误处理、m1ddc 打包）
-- `tray-polish`: 托盘菜单完善（版本标题、自定义名称、帮助子菜单、正式化）
+- `tray-polish`: 托盘菜单完善（扁平化结构：版本+作者标题、自定义名称、主页/反馈直接置顶级菜单）
 - `toast-notification`: 全局 Toast 通知系统（切换中/成功/警告/失败，底部定位）
 - `hot-plug-detection`: 显示器热插拔检测（定时轮询 + 可见性控制）
 - `switch-verification`: 切换后验证与反馈（读取实际输入状态、无信号端口警告）
@@ -47,7 +47,7 @@
 ## Impact
 
 - **前端**：`App.tsx`（Toast 系统、轮询、互斥锁）、`monitor-card.tsx`（当前输入标记）、`index.css`（品牌色、滚动条隐藏）、`index.html`（语言属性、暗色模式脚本）、新增 `types/monitor.ts`、`monitor-card-skeleton.tsx`
-- **后端**：`tray.rs`（帮助子菜单、正式化）、`config.rs`（移除死代码和 tips_dismissed）、`lib.rs`（日志插件、错误处理）、`monitor.rs`（切换后验证、内置显示器过滤、动态输入列表、m1ddc sidecar）
+- **后端**：`tray.rs`（扁平化菜单、作者信息）、`config.rs`（移除死代码和 tips_dismissed）、`lib.rs`（日志插件、错误处理）、`monitor.rs`（切换后验证、内置显示器过滤、动态输入列表、m1ddc sidecar、DDC_LOCK 互斥锁）
 - **打包**：`src-tauri/binaries/m1ddc-aarch64-apple-darwin`、`tauri.conf.json` 增加 `externalBin`
 - **根目录**：新增 `LICENSE`
 - **新增 Rust 依赖**：`open`（打开浏览器链接）

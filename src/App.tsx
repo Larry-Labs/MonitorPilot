@@ -123,7 +123,7 @@ function App() {
     try {
       const result = await invoke<string>("cmd_switch_input", { monitorIndex, inputValue });
       await silentRefresh();
-      const isWarning = result.includes("仍为") || result.includes("无法验证");
+      const isWarning = result.includes("仍为");
       showToast(
         { type: isWarning ? "warning" : "success", message: result },
         isWarning ? 4000 : 2500

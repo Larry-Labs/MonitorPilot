@@ -34,4 +34,4 @@
   - Linux：需要 i2c-dev 内核模块和用户组权限
   - Windows：通过 Win32 API（SetVCPFeature/GetVCPFeature）访问
 - **Rust 依赖**：`ddc-hi` crate（Linux/Windows DDC/CI 库）、macOS 使用 `m1ddc` CLI
-- **打包分发**：.dmg（macOS）/ .exe 绿色版（Windows）/ .AppImage（Linux），实测 .dmg 仅 3.7MB
+- **打包分发**：.dmg（macOS）/ .exe NSIS 安装包（Windows）/ .AppImage（Linux）

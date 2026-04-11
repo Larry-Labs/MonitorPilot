@@ -93,7 +93,7 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
-            log::info!("配置目录: {}", app_data_dir.display());
+            log::debug!("配置目录: {}", app_data_dir.display());
             let config_manager = Arc::new(ConfigManager::new(app_data_dir));
             app.manage(config_manager);
 

@@ -5,7 +5,9 @@ use std::sync::{Mutex, OnceLock};
 static DDC_LOCK: Mutex<()> = Mutex::new(());
 
 #[cfg(not(target_os = "macos"))]
-const VCP_INPUT_SOURCE: u8 = 0x60;
+const VCP_INPUT_SOURCE: u8 = 0x60; // VESA MCCS Standard - Input Source Select
+
+const POST_SWITCH_VERIFY_DELAY_MS: u64 = 500;
 
 #[derive(Serialize, Clone, Debug)]
 pub struct InputSource {
@@ -261,8 +263,8 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
         return Err(format!("切换失败: {}", trimmed));
     }
 
-    log::debug!("切换命令已发送，等待 500ms 验证...");
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    log::debug!("切换命令已发送，等待 {}ms 验证...", POST_SWITCH_VERIFY_DELAY_MS);
+    std::thread::sleep(std::time::Duration::from_millis(POST_SWITCH_VERIFY_DELAY_MS));
 
     match macos_get_input(display_num) {
         Some(actual) if actual == input_value => {
@@ -299,7 +301,7 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
 
                 match rollback {
                     Ok(r) if r.status.success() => {
-                        std::thread::sleep(std::time::Duration::from_millis(500));
+                        std::thread::sleep(std::time::Duration::from_millis(POST_SWITCH_VERIFY_DELAY_MS));
                         let recovered = macos_get_input(display_num);
                         if recovered == Some(prev) {
                             log::info!("回滚成功: 已恢复到 {}", input_name(prev));

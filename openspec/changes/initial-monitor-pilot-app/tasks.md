@@ -3,7 +3,7 @@
 - [x] 1.1 初始化 Tauri 2 项目（React + TypeScript + Vite）
 - [x] 1.2 配置 Tailwind CSS 4 和 shadcn/ui
 - [x] 1.3 添加 Rust 依赖：`ddc-hi`、`serde`、`serde_json` 到 `Cargo.toml`
-- [x] 1.4 配置 Tauri 权限：system tray、fs（配置文件读写）
+- [x] 1.4 配置 Tauri 权限：core:default（配置文件通过 Rust std::fs 读写，不使用 Tauri fs 插件）
 - [x] 1.5 创建项目 README.md，说明构建和运行方式
 
 ## 2. Rust 后端：DDC/CI 通信层
@@ -58,5 +58,5 @@
 
 ## 10. 打包与分发
 
-- [x] 10.1 配置 Tauri 打包：macOS (.dmg)、Windows (.exe 绿色免安装)、Linux (.AppImage)
+- [x] 10.1 配置 Tauri 打包：macOS (.dmg)、Windows (.exe NSIS 安装包)、Linux (.AppImage)
 - [x] 10.2 配置 GitHub Actions CI/CD 自动构建三平台安装包
