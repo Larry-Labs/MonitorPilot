@@ -3,7 +3,7 @@
 - [x] 1.1 初始化 Tauri 2 项目（React + TypeScript + Vite）
 - [x] 1.2 配置 Tailwind CSS 4 和 shadcn/ui
 - [x] 1.3 添加 Rust 依赖：`ddc-hi`、`serde`、`serde_json` 到 `Cargo.toml`
-- [x] 1.4 配置 Tauri 权限：system tray、global shortcut、fs（配置文件读写）
+- [x] 1.4 配置 Tauri 权限：system tray、fs（配置文件读写）
 - [x] 1.5 创建项目 README.md，说明构建和运行方式
 
 ## 2. Rust 后端：DDC/CI 通信层
@@ -16,7 +16,7 @@
 
 ## 3. Rust 后端：配置管理
 
-- [x] 3.1 定义配置数据结构（`AppConfig`：自定义输入名称映射、快捷键绑定）
+- [x] 3.1 定义配置数据结构（`AppConfig`：自定义输入名称映射）
 - [x] 3.2 实现配置文件的读取和写入（JSON 格式，存储在 `app_data_dir`）
 - [x] 3.3 实现首次启动时的默认配置生成
 
@@ -24,9 +24,7 @@
 
 - [x] 4.1 注册 `cmd_get_monitors` 命令：返回所有检测到的显示器信息
 - [x] 4.2 注册 `cmd_switch_input` 命令：切换指定显示器的输入源
-- [x] 4.3 注册 `cmd_get_config` / `cmd_save_config` / `cmd_save_hotkeys` 命令
-
-> 注：移除了 `refresh_monitors` 独立命令 — 刷新逻辑内嵌在 `get_monitors` 中，UI 侧去掉了手动刷新按钮（自动刷新在每次切换后执行）
+- [x] 4.3 注册 `cmd_get_config` / `cmd_save_config` 命令
 
 ## 5. 系统托盘实现
 
@@ -41,26 +39,24 @@
 - [x] 6.1 搭建设置窗口的基础布局（shadcn/ui + Tailwind CSS）
 - [x] 6.2 实现显示器列表页面：显示检测到的显示器、当前输入源、切换按钮
 - [ ] 6.3 实现输入源自定义命名功能：编辑输入源的显示名称
-- [x] 6.4 实现快捷键配置页面：为每个显示器+输入源组合绑定全局快捷键
-- [x] 6.5 实现快捷键录制组件（按键捕获 → 显示组合键）
 
-## 7. 全局快捷键
+## 7. 单实例保证
 
-- [x] 7.1 使用 Tauri global-shortcut 插件注册/注销全局快捷键
-- [x] 7.2 实现快捷键触发时的输入源切换逻辑
-- [ ] 7.3 实现双输入源场景的 toggle 快捷键（在两个输入之间来回切换）
-- [x] 7.4 实现应用启动时自动恢复已配置的快捷键
+- [x] 7.1 添加 Tauri single-instance 插件依赖
+- [x] 7.2 实现单实例检测：如果已有实例运行，将焦点切换到已有实例并退出新实例
 
-## 8. 跨平台适配与测试
+## 8. 移除快捷键功能
 
-- [ ] 8.1 macOS 测试：验证 m1ddc 通信、menu bar 图标、全局快捷键
-- [ ] 8.2 Linux 测试：验证 i2c-dev 通信、权限检测与引导、system tray
-- [ ] 8.3 Windows 测试：验证 Win32 Monitor Configuration API、system tray、全局快捷键
-- [ ] 8.4 实现 Linux 权限检测与 i2c-dev 模块加载引导
+- [x] 8.1 移除全局快捷键相关代码（config.rs 中的 HotkeyBinding、lib.rs 中的注册逻辑）
+- [x] 8.2 移除前端快捷键配置组件（hotkey-config.tsx）
+- [x] 8.3 移除 global-shortcut 插件依赖
+- [x] 8.4 清理 capabilities 中的 global-shortcut 权限
 
-## 9. 打包与分发
+## 9. 跨平台适配
 
-- [ ] 9.1 配置 Tauri 打包：macOS (.dmg)、Windows (.exe 绿色免安装)、Linux (.AppImage)
-- [ ] 9.2 设计应用图标（多尺寸，适配各平台要求）
-- [ ] 9.3 配置 GitHub Actions CI/CD 自动构建三平台安装包
-- [ ] 9.4 Windows 绿色版配置：确保单 .exe 文件包含所有资源，无需安装
+- [ ] 9.1 实现 Linux 权限检测与 i2c-dev 模块加载引导
+
+## 10. 打包与分发
+
+- [ ] 10.1 配置 Tauri 打包：macOS (.dmg)、Windows (.exe 绿色免安装)、Linux (.AppImage)
+- [ ] 10.2 配置 GitHub Actions CI/CD 自动构建三平台安装包

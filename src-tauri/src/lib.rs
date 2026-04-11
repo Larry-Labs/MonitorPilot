@@ -2,11 +2,11 @@ mod config;
 mod monitor;
 mod tray;
 
-use config::{AppConfig, ConfigManager, HotkeyBinding};
+use config::{AppConfig, ConfigManager};
 use monitor::{get_monitors, switch_input, MonitorInfo};
 use serde::Serialize;
-use tauri::Manager;
 use std::sync::Arc;
+use tauri::Manager;
 
 #[derive(Serialize)]
 struct MonitorListResult {
@@ -48,49 +48,21 @@ fn cmd_get_config(state: tauri::State<'_, Arc<ConfigManager>>) -> AppConfig {
 
 #[tauri::command]
 fn cmd_save_config(
-    app: tauri::AppHandle,
     state: tauri::State<'_, Arc<ConfigManager>>,
     config: AppConfig,
 ) -> Result<(), String> {
-    state.save(config.clone())?;
-    register_hotkeys_from_config(&app, &config.hotkeys);
-    Ok(())
-}
-
-#[tauri::command]
-fn cmd_save_hotkeys(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, Arc<ConfigManager>>,
-    hotkeys: Vec<HotkeyBinding>,
-) -> Result<(), String> {
-    state.set_hotkeys(hotkeys.clone())?;
-    register_hotkeys_from_config(&app, &hotkeys);
-    Ok(())
-}
-
-fn register_hotkeys_from_config(app: &tauri::AppHandle, hotkeys: &[HotkeyBinding]) {
-    use tauri_plugin_global_shortcut::GlobalShortcutExt;
-
-    let _ = app.global_shortcut().unregister_all();
-
-    for binding in hotkeys {
-        let monitor_idx = binding.monitor_index;
-        let input_val = binding.input_value;
-        let app_handle = app.clone();
-
-        if let Ok(shortcut) = binding.shortcut.parse::<tauri_plugin_global_shortcut::Shortcut>() {
-            let _ = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, _event| {
-                let _ = switch_input(monitor_idx, input_val);
-                tray::refresh_tray(&app_handle);
-            });
-        }
-    }
+    state.save(config)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -101,17 +73,14 @@ pub fn run() {
                 )?;
             }
 
-            let app_data_dir = app.path().app_data_dir().expect("failed to get app data dir");
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to get app data dir");
             let config_manager = Arc::new(ConfigManager::new(app_data_dir));
-
-            let initial_hotkeys = config_manager.get().hotkeys.clone();
             app.manage(config_manager);
 
             tray::setup_tray(app.handle())?;
-
-            if !initial_hotkeys.is_empty() {
-                register_hotkeys_from_config(app.handle(), &initial_hotkeys);
-            }
 
             Ok(())
         })
@@ -120,7 +89,6 @@ pub fn run() {
             cmd_switch_input,
             cmd_get_config,
             cmd_save_config,
-            cmd_save_hotkeys,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

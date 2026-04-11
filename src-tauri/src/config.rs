@@ -5,25 +5,15 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct HotkeyBinding {
-    pub monitor_index: usize,
-    pub input_value: u8,
-    pub shortcut: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AppConfig {
     #[serde(default)]
     pub input_names: HashMap<String, String>,
-    #[serde(default)]
-    pub hotkeys: Vec<HotkeyBinding>,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             input_names: HashMap::new(),
-            hotkeys: Vec::new(),
         }
     }
 }
@@ -58,11 +48,10 @@ impl ConfigManager {
             fs::create_dir_all(parent).map_err(|e| format!("无法创建配置目录: {}", e))?;
         }
 
-        let json = serde_json::to_string_pretty(&config)
-            .map_err(|e| format!("序列化配置失败: {}", e))?;
+        let json =
+            serde_json::to_string_pretty(&config).map_err(|e| format!("序列化配置失败: {}", e))?;
 
-        fs::write(&self.config_path, json)
-            .map_err(|e| format!("写入配置文件失败: {}", e))?;
+        fs::write(&self.config_path, json).map_err(|e| format!("写入配置文件失败: {}", e))?;
 
         *self.config.lock().unwrap() = config;
         Ok(())
@@ -75,12 +64,6 @@ impl ConfigManager {
         } else {
             config.input_names.insert(key, name);
         }
-        self.save(config)
-    }
-
-    pub fn set_hotkeys(&self, hotkeys: Vec<HotkeyBinding>) -> Result<(), String> {
-        let mut config = self.get();
-        config.hotkeys = hotkeys;
         self.save(config)
     }
 }
