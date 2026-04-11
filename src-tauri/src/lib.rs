@@ -1,4 +1,5 @@
 mod monitor;
+mod tray;
 
 use monitor::{MonitorInfo, get_monitors, switch_input};
 use serde::Serialize;
@@ -18,8 +19,12 @@ fn cmd_get_monitors() -> MonitorListResult {
 }
 
 #[tauri::command]
-fn cmd_switch_input(monitor_index: usize, input_value: u8) -> Result<String, String> {
-    switch_input(monitor_index, input_value)
+fn cmd_switch_input(app: tauri::AppHandle, monitor_index: usize, input_value: u8) -> Result<String, String> {
+    let result = switch_input(monitor_index, input_value);
+    if result.is_ok() {
+        tray::refresh_tray(&app);
+    }
+    result
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -35,6 +40,9 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            tray::setup_tray(app.handle())?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![cmd_get_monitors, cmd_switch_input])
