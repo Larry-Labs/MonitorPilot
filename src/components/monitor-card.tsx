@@ -57,7 +57,7 @@ export function MonitorCard({ monitor, switching, customNames, onSwitch, onRenam
             </div>
             <div>
               <p className="text-sm font-semibold leading-tight">{monitor.model}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">当前输入: {activeDisplayName}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">#{monitor.index}</p>
             </div>
           </div>
           <Badge className="text-[11px] font-medium bg-primary/10 text-primary hover:bg-primary/15 border-primary/15 gap-1.5">
