@@ -36,12 +36,10 @@ fn build_tray_menu(
 ) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn std::error::Error>> {
     let mut builder = MenuBuilder::new(app);
 
-    let title = MenuItemBuilder::with_id(
-        "title",
-        format!("MonitorPilot v{}", APP_VERSION),
-    )
-    .enabled(false)
-    .build(app)?;
+    let title =
+        MenuItemBuilder::with_id("title", format!("MonitorPilot v{}", APP_VERSION))
+            .enabled(false)
+            .build(app)?;
     builder = builder.item(&title);
 
     builder = builder.separator();
@@ -74,23 +72,34 @@ fn build_tray_menu(
 
     builder = builder.separator();
 
-    let refresh = MenuItemBuilder::with_id("refresh", "🔄  刷新显示器列表").build(app)?;
+    let refresh = MenuItemBuilder::with_id("refresh", "刷新显示器列表").build(app)?;
     builder = builder.item(&refresh);
 
-    let settings = MenuItemBuilder::with_id("settings", "⚙️  打开主界面").build(app)?;
+    let settings = MenuItemBuilder::with_id("settings", "打开主界面...").build(app)?;
     builder = builder.item(&settings);
 
     builder = builder.separator();
 
+    let help = SubmenuBuilder::new(app, "帮助");
     let about = MenuItemBuilder::with_id(
         "about",
         format!("关于 MonitorPilot v{}", APP_VERSION),
     )
     .enabled(false)
     .build(app)?;
-    builder = builder.item(&about);
+    let homepage = MenuItemBuilder::with_id("homepage", "访问项目主页").build(app)?;
+    let report_issue = MenuItemBuilder::with_id("report_issue", "反馈问题").build(app)?;
+    let help_menu = help
+        .item(&about)
+        .separator()
+        .item(&homepage)
+        .item(&report_issue)
+        .build()?;
+    builder = builder.item(&help_menu);
 
-    let quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+    builder = builder.separator();
+
+    let quit = MenuItemBuilder::with_id("quit", "退出 MonitorPilot").build(app)?;
     builder = builder.item(&quit);
 
     Ok(builder.build()?)
@@ -101,7 +110,7 @@ fn build_monitor_submenu(
     monitor: &crate::monitor::MonitorInfo,
     custom_names: &std::collections::HashMap<String, String>,
 ) -> Result<tauri::menu::Submenu<tauri::Wry>, Box<dyn std::error::Error>> {
-    let mut submenu = SubmenuBuilder::new(app, format!("🖥  {}", &monitor.model));
+    let mut submenu = SubmenuBuilder::new(app, &monitor.model);
 
     for input in &monitor.supported_inputs {
         let is_active = monitor.current_input == Some(input.value);
@@ -109,9 +118,9 @@ fn build_monitor_submenu(
         let key = format!("{}-{}", monitor.index, input.value);
         let display_name = custom_names.get(&key).unwrap_or(&input.name);
         let label = if is_active {
-            format!("✓  {}", display_name)
+            format!("✓ {}", display_name)
         } else {
-            format!("    {}", display_name)
+            format!("   {}", display_name)
         };
 
         let item = MenuItemBuilder::with_id(item_id, label)
@@ -136,6 +145,12 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
         }
         "refresh" => {
             refresh_tray(app);
+        }
+        "homepage" => {
+            let _ = open::that("https://github.com/Larry-Labs/MonitorPilot");
+        }
+        "report_issue" => {
+            let _ = open::that("https://github.com/Larry-Labs/MonitorPilot/issues");
         }
         id if id.starts_with("switch_") => {
             let parts: Vec<&str> = id.split('_').collect();
