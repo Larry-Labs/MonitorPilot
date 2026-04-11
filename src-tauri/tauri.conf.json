@@ -16,6 +16,8 @@
         "label": "main",
         "width": 720,
         "height": 520,
+        "minWidth": 380,
+        "minHeight": 400,
         "resizable": true,
         "fullscreen": false,
         "center": true,

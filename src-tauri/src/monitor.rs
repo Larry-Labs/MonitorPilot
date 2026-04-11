@@ -92,7 +92,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
     let m1ddc = find_m1ddc();
     log::debug!("m1ddc 路径: {}", m1ddc);
 
-    let output = Command::new(&m1ddc)
+    let output = Command::new(m1ddc)
         .args(["display", "list"])
         .output()
         .map_err(|e| format!("无法执行 m1ddc: {}。请确认已安装: brew install m1ddc", e))?;
@@ -126,7 +126,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
             display_num,
             model,
             current_input
-                .map(|v| input_name(v))
+                .map(input_name)
                 .unwrap_or_else(|| "未知".to_string())
         );
 
@@ -135,7 +135,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
             model,
             current_input,
             current_input_name: current_input
-                .map(|v| input_name(v))
+                .map(input_name)
                 .unwrap_or_else(|| "未知".to_string()),
             supported_inputs: supported_inputs_with_current(current_input),
         });
@@ -188,7 +188,7 @@ fn parse_m1ddc_line(line: &str) -> (u32, String) {
 #[cfg(target_os = "macos")]
 fn macos_get_input(display_num: u32) -> Option<u8> {
     let m1ddc = find_m1ddc();
-    let output = Command::new(&m1ddc)
+    let output = Command::new(m1ddc)
         .args(["get", "input", "-d", &display_num.to_string()])
         .output()
         .ok()?;
@@ -220,7 +220,7 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
         "切换请求: 显示器 #{} | {} → {} | 当前: {}",
         display_num,
         previous_input
-            .map(|v| input_name(v))
+            .map(input_name)
             .unwrap_or_else(|| "未知".to_string()),
         input_name(input_value),
         previous_input
@@ -228,7 +228,7 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
             .unwrap_or_else(|| "N/A".to_string())
     );
 
-    let output = Command::new(&m1ddc)
+    let output = Command::new(m1ddc)
         .args([
             "set",
             "input",
@@ -286,10 +286,10 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
         None => {
             log::warn!(
                 "切换后显示器不可达，尝试回滚到 {:?}",
-                previous_input.map(|v| input_name(v))
+                previous_input.map(input_name)
             );
             if let Some(prev) = previous_input {
-                let rollback = Command::new(&m1ddc)
+                let rollback = Command::new(m1ddc)
                     .args([
                         "set",
                         "input",

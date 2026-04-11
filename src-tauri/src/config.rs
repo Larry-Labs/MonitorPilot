@@ -5,18 +5,12 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Default)]
 pub struct AppConfig {
     #[serde(default)]
     pub input_names: HashMap<String, String>,
 }
 
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            input_names: HashMap::new(),
-        }
-    }
-}
 
 pub struct ConfigManager {
     config: Mutex<AppConfig>,

@@ -113,7 +113,10 @@ function App() {
   }, [silentRefresh]);
 
   const handleSwitch = useCallback(async (monitorIndex: number, inputValue: number) => {
-    if (switchLock.current) return;
+    if (switchLock.current) {
+      showToast({ type: "switching", message: "操作进行中，请稍候..." }, 1500);
+      return;
+    }
     switchLock.current = true;
 
     const key = `${monitorIndex}-${inputValue}`;
