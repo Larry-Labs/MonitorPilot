@@ -13,8 +13,13 @@ const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let menu = build_tray_menu(app)?;
 
+    let icon = app
+        .default_window_icon()
+        .cloned()
+        .ok_or("默认窗口图标未设置")?;
+
     TrayIconBuilder::with_id("main")
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(icon)
         .menu(&menu)
         .tooltip("MonitorPilot")
         .on_menu_event(move |app, event| {
@@ -155,9 +160,16 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
 }
 
 pub fn refresh_tray(app: &AppHandle) {
-    if let Ok(menu) = build_tray_menu(app) {
-        if let Some(tray) = app.tray_by_id("main") {
-            let _ = tray.set_menu(Some(menu));
+    match build_tray_menu(app) {
+        Ok(menu) => {
+            if let Some(tray) = app.tray_by_id("main") {
+                let _ = tray.set_menu(Some(menu));
+            } else {
+                log::warn!("refresh_tray: 未找到 id 为 main 的托盘实例");
+            }
+        }
+        Err(e) => {
+            log::error!("refresh_tray: 构建菜单失败: {}", e);
         }
     }
 }

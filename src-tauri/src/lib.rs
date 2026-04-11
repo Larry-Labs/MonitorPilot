@@ -77,7 +77,7 @@ pub fn run() {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
-                .expect("failed to get app data dir");
+                .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
             let config_manager = Arc::new(ConfigManager::new(app_data_dir));
             app.manage(config_manager);
 

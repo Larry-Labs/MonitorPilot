@@ -54,6 +54,7 @@ function App() {
   };
 
   const handleRename = async (key: string, name: string) => {
+    const previous = { ...customNames };
     const updated = { ...customNames };
     if (name) {
       updated[key] = name;
@@ -65,16 +66,17 @@ function App() {
     try {
       await invoke("cmd_save_config", { config: { input_names: updated } });
     } catch (e) {
+      setCustomNames(previous);
       setError(String(e));
     }
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
       <header className="relative border-b border-border/60 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-primary/4 to-transparent" />
         <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        <div className="relative px-6 py-5">
+        <div className="relative px-5 py-3.5">
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/25">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -93,7 +95,7 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-1 p-5 space-y-4">
+      <main className="flex-1 px-5 py-4 space-y-3 overflow-y-auto">
         {error && (
           <Alert variant="destructive">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -168,9 +170,9 @@ function App() {
         )}
       </main>
 
-      <footer className="border-t border-border/40 px-6 py-2.5">
+      <footer className="border-t border-border/40 px-5 py-2">
         <p className="text-[10px] text-muted-foreground/50 text-center">
-          MonitorPilot v0.1.0
+          MonitorPilot v{__APP_VERSION__}
         </p>
       </footer>
     </div>
