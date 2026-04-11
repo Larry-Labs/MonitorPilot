@@ -44,6 +44,20 @@ function App() {
     }
   }, []);
 
+  const silentRefresh = useCallback(async () => {
+    try {
+      const result = await invoke<MonitorListResult>("cmd_get_monitors");
+      setMonitors(result.monitors);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setError(null);
+      }
+    } catch {
+      // silent — don't overwrite existing state on poll failure
+    }
+  }, []);
+
   useEffect(() => {
     refreshMonitors();
     invoke<AppConfig>("cmd_get_config")
@@ -54,6 +68,30 @@ function App() {
         console.error("加载配置失败:", e);
       });
   }, [refreshMonitors]);
+
+  useEffect(() => {
+    const POLL_INTERVAL = 5000;
+    let timer: ReturnType<typeof setInterval>;
+
+    const startPolling = () => {
+      timer = setInterval(() => {
+        if (!switching) silentRefresh();
+      }, POLL_INTERVAL);
+    };
+
+    const handleVisibility = () => {
+      clearInterval(timer);
+      if (!document.hidden) startPolling();
+    };
+
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [silentRefresh, switching]);
 
   const handleSwitch = async (monitorIndex: number, inputValue: number) => {
     const key = `${monitorIndex}-${inputValue}`;
