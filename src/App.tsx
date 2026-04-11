@@ -21,11 +21,16 @@ interface MonitorListResult {
   error: string | null;
 }
 
+interface AppConfig {
+  input_names: Record<string, string>;
+}
+
 function App() {
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
+  const [customNames, setCustomNames] = useState<Record<string, string>>({});
 
   const refreshMonitors = useCallback(async () => {
     setLoading(true);
@@ -45,21 +50,37 @@ function App() {
 
   useEffect(() => {
     refreshMonitors();
+    invoke<AppConfig>("cmd_get_config").then((config) => {
+      setCustomNames(config.input_names || {});
+    });
   }, [refreshMonitors]);
 
-  const handleSwitch = async (monitorIndex: number, inputValue: number, inputName: string) => {
+  const handleSwitch = async (monitorIndex: number, inputValue: number) => {
     const key = `${monitorIndex}-${inputValue}`;
     setSwitching(key);
     try {
-      await invoke("cmd_switch_input", {
-        monitorIndex,
-        inputValue,
-      });
+      await invoke("cmd_switch_input", { monitorIndex, inputValue });
       await refreshMonitors();
     } catch (e) {
       setError(String(e));
     } finally {
       setSwitching(null);
+    }
+  };
+
+  const handleRename = async (key: string, name: string) => {
+    const updated = { ...customNames };
+    if (name) {
+      updated[key] = name;
+    } else {
+      delete updated[key];
+    }
+    setCustomNames(updated);
+
+    try {
+      await invoke("cmd_save_config", { config: { input_names: updated } });
+    } catch (e) {
+      setError(String(e));
     }
   };
 
@@ -96,10 +117,11 @@ function App() {
               key={monitor.index}
               monitor={monitor}
               switching={switching}
+              customNames={customNames}
               onSwitch={handleSwitch}
+              onRename={handleRename}
             />
           ))}
-
         </main>
       </div>
     </TooltipProvider>

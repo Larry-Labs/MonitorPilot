@@ -36,12 +36,20 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "shortDescription": "Monitor Input Source Switcher",
+    "longDescription": "Cross-platform monitor input source switcher using DDC/CI protocol",
+    "category": "Utility",
     "macOS": {
       "minimumSystemVersion": "12.0"
     },
     "windows": {
       "nsis": {
         "installMode": "currentUser"
+      }
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": false
       }
     }
   }
