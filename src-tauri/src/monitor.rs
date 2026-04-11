@@ -70,6 +70,12 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
 
         let model = parse_m1ddc_display_name(line);
         let display_num = (i + 1) as u32;
+
+        // Skip built-in displays as they don't support DDC/CI
+        if model == "内置显示器" {
+            continue;
+        }
+
         let current_input = macos_get_input(display_num);
 
         monitors.push(MonitorInfo {
@@ -145,10 +151,24 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<String, Str
         .map_err(|e| format!("无法执行 m1ddc: {}", e))?;
 
     if output.status.success() {
-        Ok(format!("已切换到 {}", input_name(input_value)))
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let trimmed = stdout.trim();
+        if trimmed.contains("Could not find") || trimmed.contains("error") {
+            Err(format!("切换失败: {}", trimmed))
+        } else {
+            Ok(format!("已切换到 {}", input_name(input_value)))
+        }
     } else {
+        let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("切换失败: {}", stderr))
+        let msg = if !stdout.trim().is_empty() {
+            stdout.trim().to_string()
+        } else if !stderr.trim().is_empty() {
+            stderr.trim().to_string()
+        } else {
+            format!("m1ddc 退出码: {}", output.status)
+        };
+        Err(format!("切换失败: {}", msg))
     }
 }
 

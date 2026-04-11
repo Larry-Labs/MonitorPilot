@@ -43,11 +43,13 @@ function App() {
   const handleSwitch = async (monitorIndex: number, inputValue: number) => {
     const key = `${monitorIndex}-${inputValue}`;
     setSwitching(key);
+    setError(null);
     try {
       await invoke("cmd_switch_input", { monitorIndex, inputValue });
       await refreshMonitors();
     } catch (e) {
-      setError(String(e));
+      const errorMsg = String(e);
+      setError(errorMsg);
     } finally {
       setSwitching(null);
     }
