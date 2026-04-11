@@ -171,7 +171,7 @@ function App() {
       </main>
 
       <footer className="border-t border-border/40 px-5 py-2">
-        <p className="text-[10px] text-muted-foreground/50 text-center">
+        <p className="text-[10px] text-muted-foreground/70 text-center">
           MonitorPilot v{__APP_VERSION__}
         </p>
       </footer>

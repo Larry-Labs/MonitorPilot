@@ -76,16 +76,14 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut monitors = Vec::new();
 
-    for (i, line) in stdout.lines().enumerate() {
+    for line in stdout.lines() {
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
 
-        let model = parse_m1ddc_display_name(line);
-        let display_num = (i + 1) as u32;
+        let (display_num, model) = parse_m1ddc_line(line);
 
-        // Skip built-in displays as they don't support DDC/CI
         if model == "内置显示器" {
             continue;
         }
@@ -98,7 +96,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
             current_input,
             current_input_name: current_input
                 .map(|v| input_name(v))
-                .unwrap_or_else(|| "Unknown".to_string()),
+                .unwrap_or_else(|| "未知".to_string()),
             supported_inputs: default_supported_inputs(),
         });
     }
@@ -106,35 +104,40 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
     Ok(monitors)
 }
 
+/// Parse a single m1ddc display list line.
+/// Format: "[N] ModelName (UUID)" or "[N] (null) (UUID)"
+/// Returns (display_num, model_name).
 #[cfg(target_os = "macos")]
-fn parse_m1ddc_display_name(line: &str) -> String {
-    // m1ddc format: "[1] ModelName (UUID)" or "[1] (null) (UUID)"
-    let stripped = if let Some(rest) = line.strip_prefix('[') {
-        rest.find(']').map(|i| rest[i + 1..].trim()).unwrap_or(line)
+fn parse_m1ddc_line(line: &str) -> (u32, String) {
+    let mut display_num: u32 = 1;
+    let rest;
+
+    if let Some(stripped) = line.strip_prefix('[') {
+        if let Some(bracket_end) = stripped.find(']') {
+            display_num = stripped[..bracket_end].trim().parse().unwrap_or(1);
+            rest = stripped[bracket_end + 1..].trim();
+        } else {
+            rest = line;
+        }
     } else {
-        line
-    };
+        rest = line;
+    }
 
     // Remove trailing UUID in parentheses: "ModelName (UUID)" → "ModelName"
-    let name = if let Some(idx) = stripped.rfind('(') {
-        let before = stripped[..idx].trim();
+    let name = if let Some(idx) = rest.rfind('(') {
+        let before = rest[..idx].trim();
         if before.is_empty() || before == "(null)" {
-            stripped.to_string()
-        } else if before == "(null)" {
             "内置显示器".to_string()
         } else {
             before.to_string()
         }
+    } else if rest.is_empty() || rest.contains("(null)") {
+        "内置显示器".to_string()
     } else {
-        stripped.to_string()
+        rest.to_string()
     };
 
-    // Handle "(null)" model name
-    if name.contains("(null)") || name.is_empty() {
-        return "内置显示器".to_string();
-    }
-
-    name
+    (display_num, name)
 }
 
 #[cfg(target_os = "macos")]
@@ -145,9 +148,12 @@ fn macos_get_input(display_num: u32) -> Option<u8> {
         .output()
         .ok()?;
 
+    if !output.status.success() {
+        return None;
+    }
+
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let trimmed = stdout.trim();
-    trimmed.parse::<u8>().ok()
+    stdout.trim().parse::<u8>().ok()
 }
 
 #[cfg(target_os = "macos")]
@@ -212,7 +218,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
 
         let current_input_name = current_input
             .map(|v| input_name(v))
-            .unwrap_or_else(|| "Unknown".to_string());
+            .unwrap_or_else(|| "未知".to_string());
 
         monitors.push(MonitorInfo {
             index: i,
