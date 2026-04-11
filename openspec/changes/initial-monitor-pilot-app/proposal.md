@@ -7,9 +7,10 @@
 - 创建全新的跨平台桌面应用 MonitorPilot
 - 基于 Tauri 2 框架（Rust 后端 + Web 前端），支持 macOS / Linux / Windows
 - 通过 DDC/CI 协议与显示器通信，实现软件控制输入源切换
-- 提供系统托盘（System Tray）常驻应用，支持快捷键一键切换
+- 提供系统托盘（System Tray）常驻应用，一键切换
 - 自动检测已连接的显示器及其支持的输入源
-- 支持用户自定义输入源命名和快捷键绑定
+- 支持用户自定义输入源命名
+- 单实例运行保证（不会重复启动多个实例）
 
 ## Capabilities
 
@@ -18,7 +19,7 @@
 - `monitor-detection`: 自动检测已连接的显示器，读取显示器型号、当前输入源等信息
 - `input-switching`: 通过 DDC/CI 协议切换显示器输入源（DP、HDMI、USB-C 等）
 - `system-tray`: 系统托盘常驻应用，提供快速切换菜单
-- `hotkey-binding`: 全局快捷键绑定，支持一键切换到指定输入源
+- `single-instance`: 单实例运行保证，重复启动时聚焦已有窗口
 - `cross-platform`: 跨平台支持（macOS / Linux / Windows），统一的用户体验
 
 ### Modified Capabilities
@@ -32,5 +33,5 @@
   - macOS：需要 I/O Kit 权限访问显示器 DDC/CI
   - Linux：需要 i2c-dev 内核模块和用户组权限
   - Windows：通过 Win32 API（SetVCPFeature/GetVCPFeature）访问
-- **Rust 依赖**：`ddc-hi` crate（跨平台 DDC/CI 库）
-- **打包分发**：通过 Tauri 打包为各平台原生安装包（.dmg / .deb / .msi）
+- **Rust 依赖**：`ddc-hi` crate（Linux/Windows DDC/CI 库）、macOS 使用 `m1ddc` CLI
+- **打包分发**：.dmg（macOS）/ .exe 绿色版（Windows）/ .AppImage（Linux），实测 .dmg 仅 3.7MB

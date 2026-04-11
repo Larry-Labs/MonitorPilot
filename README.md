@@ -6,13 +6,14 @@
 
 - 自动检测 DDC/CI 兼容显示器及其支持的输入源
 - 系统托盘常驻，右键快速切换
-- 全局快捷键一键切换
 - 自定义输入源名称（如 "MacBook" 代替 "DP-1"）
+- 单实例运行保证（不会重复启动多个实例）
 - 支持 macOS / Linux / Windows
+- 极致轻量（macOS .dmg 仅 3.7MB）
 
 ## 技术栈
 
-- **后端**：Rust + [ddc-hi](https://crates.io/crates/ddc-hi)（DDC/CI 通信）
+- **后端**：Rust + [m1ddc](https://github.com/waydabber/m1ddc)（macOS）/ [ddc-hi](https://crates.io/crates/ddc-hi)（Linux/Windows）
 - **前端**：React + TypeScript + [shadcn/ui](https://ui.shadcn.com/) + Tailwind CSS
 - **框架**：[Tauri 2](https://v2.tauri.app/)
 
@@ -21,6 +22,12 @@
 - [Node.js](https://nodejs.org/) >= 20
 - [Rust](https://www.rust-lang.org/tools/install) >= 1.77
 - 显示器需开启 DDC/CI（在 OSD 菜单中设置）
+
+### macOS 额外要求
+
+```bash
+brew install m1ddc
+```
 
 ### Linux 额外要求
 
