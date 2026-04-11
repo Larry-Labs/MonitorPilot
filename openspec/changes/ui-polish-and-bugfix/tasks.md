@@ -167,3 +167,14 @@
 - [x] 21.5 编写 Rust monitor.rs 单元测试（input_name、supported_inputs、parse_m1ddc_line）
 - [x] 21.6 编写 Rust config.rs 单元测试（序列化、持久化、损坏恢复）
 - [x] 21.7 验证所有测试通过：19 Rust + 30 前端
+
+## 22. P1 代码审查修复
+
+- [x] 22.1 条件编译精确化：`cfg(not(macos))` → `cfg(any(linux, windows))`
+- [x] 22.2 Linux/Windows switch_input 新增切换后验证与回滚（与 macOS 对齐）
+- [x] 22.3 switch_input 返回结构化 SwitchResult { status, message }，替代纯字符串
+- [x] 22.4 前端 silentRefresh 连续失败 3 次后 toast 警告
+- [x] 22.5 前端 handleSwitch 按 SwitchResult.status 判断 success/warning
+- [x] 22.6 更新 lib.rs、tray.rs、App.tsx、types/monitor.ts 全链路对齐
+- [x] 22.7 更新测试：SwitchResult 类型测试、warning 场景测试
+- [x] 22.8 文档同步：README、design、proposal、spec 全部反映全平台验证和结构化返回

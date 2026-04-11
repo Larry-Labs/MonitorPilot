@@ -151,7 +151,7 @@
 本 change 定义了 MonitorPilot 的初始架构和核心能力。以下功能在后续 `ui-polish-and-bugfix` change 中定型：
 
 - 托盘菜单扁平化（版本+作者标题、移除 emoji）
-- 切换后验证与回滚（macOS，500ms 读回）
+- 切换后验证与回滚（各平台，500ms 读回 + 结构化 SwitchResult）
 - DDC_LOCK 互斥锁（在 `monitor.rs` 的 `switch_input` 内部）
 - CSP 安全策略
 - 暗色模式、骨架屏、Toast 通知系统

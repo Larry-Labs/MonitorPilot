@@ -80,12 +80,12 @@ The system SHALL provide transient toast notifications for input switching opera
 - **THEN** the system SHALL display a toast with a spinner and "正在切换输入源..." message at the bottom of the window
 
 #### Scenario: Switch success
-- **WHEN** the input switch completes successfully
+- **WHEN** the backend returns `SwitchResult` with `status: "success"`
 - **THEN** the system SHALL display a green success toast for 2.5 seconds
 
 #### Scenario: Switch warning (no signal)
-- **WHEN** the switch command succeeds but the monitor's actual input does not match the target
-- **THEN** the system SHALL display an amber warning toast for 4 seconds indicating the target port may have no signal
+- **WHEN** the backend returns `SwitchResult` with `status: "warning"`
+- **THEN** the system SHALL display an amber warning toast for 4 seconds with the `message` from the result
 
 #### Scenario: Switch failure
 - **WHEN** the switch command fails
@@ -116,6 +116,11 @@ The system SHALL automatically detect monitor connection/disconnection events.
 #### Scenario: Window restored
 - **WHEN** the application window becomes visible again
 - **THEN** the system SHALL resume polling
+
+#### Scenario: Consecutive poll failures
+- **WHEN** silent polling fails 3 times consecutively
+- **THEN** the system SHALL display a warning toast indicating monitor status may be out of sync
+- **AND** the failure counter SHALL reset after the toast, allowing another cycle
 
 ### Requirement: Active input indication on buttons
 The system SHALL clearly indicate the currently active input source on the button itself.
