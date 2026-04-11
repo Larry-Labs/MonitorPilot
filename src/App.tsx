@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { MonitorCard } from "./components/monitor-card";
 import { MonitorCardSkeleton } from "./components/monitor-card-skeleton";
@@ -6,12 +6,27 @@ import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
 import { Button } from "./components/ui/button";
 import type { MonitorInfo, MonitorListResult, AppConfig } from "./types/monitor";
 
+type ToastState = {
+  type: "switching" | "success" | "error";
+  message: string;
+} | null;
+
 function App() {
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
   const [customNames, setCustomNames] = useState<Record<string, string>>({});
+  const [toast, setToast] = useState<ToastState>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const showToast = useCallback((state: NonNullable<ToastState>, duration?: number) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(state);
+    if (duration) {
+      toastTimer.current = setTimeout(() => setToast(null), duration);
+    }
+  }, []);
 
   const refreshMonitors = useCallback(async () => {
     setLoading(true);
@@ -44,11 +59,15 @@ function App() {
     const key = `${monitorIndex}-${inputValue}`;
     setSwitching(key);
     setError(null);
+    showToast({ type: "switching", message: "正在切换输入源..." });
     try {
-      await invoke("cmd_switch_input", { monitorIndex, inputValue });
+      const result = await invoke<string>("cmd_switch_input", { monitorIndex, inputValue });
+      showToast({ type: "success", message: result }, 2000);
       await refreshMonitors();
     } catch (e) {
-      setError(String(e));
+      const errorMsg = String(e);
+      setError(errorMsg);
+      showToast({ type: "error", message: errorMsg }, 3000);
     } finally {
       setSwitching(null);
     }
@@ -95,6 +114,31 @@ function App() {
           </div>
         </div>
       </header>
+
+      {toast && (
+        <div
+          className={`px-5 py-2 text-xs font-medium flex items-center gap-2 transition-all ${
+            toast.type === "switching"
+              ? "bg-primary/10 text-primary"
+              : toast.type === "success"
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : "bg-destructive/10 text-destructive"
+          }`}
+        >
+          {toast.type === "switching" && (
+            <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+          )}
+          {toast.type === "success" && (
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          )}
+          <span>{toast.message}</span>
+        </div>
+      )}
 
       <main className="flex-1 px-5 py-4 space-y-3 overflow-y-auto">
         {error && (
