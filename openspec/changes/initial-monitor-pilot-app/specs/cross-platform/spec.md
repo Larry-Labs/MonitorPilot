@@ -5,7 +5,7 @@ The application SHALL run on macOS 12 (Monterey) and later, on both Apple Silico
 
 #### Scenario: macOS DDC/CI access
 - **WHEN** running on macOS
-- **THEN** the system SHALL access DDC/CI via I/O Kit (IODisplayConnect) without requiring any external CLI tools or additional driver installation
+- **THEN** the system SHALL access DDC/CI via bundled m1ddc sidecar binary (using Apple IOAVService API), falling back to system PATH if sidecar is not found
 
 #### Scenario: macOS menu bar integration
 - **WHEN** running on macOS
@@ -38,4 +38,4 @@ The application SHALL provide a consistent user experience across all supported 
 
 #### Scenario: Configuration portability
 - **WHEN** the user copies their configuration file from one platform to another
-- **THEN** the configuration SHALL be compatible and functional (hotkey modifiers mapped to platform equivalents: Cmd↔Ctrl)
+- **THEN** the configuration SHALL be compatible and functional (input custom names are platform-independent)

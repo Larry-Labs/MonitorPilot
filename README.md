@@ -23,11 +23,9 @@
 - [Rust](https://www.rust-lang.org/tools/install) >= 1.77
 - 显示器需开启 DDC/CI（在 OSD 菜单中设置）
 
-### macOS 额外要求
+### macOS
 
-```bash
-brew install m1ddc
-```
+macOS 版本已内置 m1ddc，无需额外安装。
 
 ### Linux 额外要求
 

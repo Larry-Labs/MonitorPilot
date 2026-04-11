@@ -71,3 +71,78 @@ The system SHALL use a single source of truth for TypeScript type definitions sh
 #### Scenario: Type consistency
 - **WHEN** `InputSource` or `MonitorInfo` types are used in any component
 - **THEN** they SHALL be imported from a shared `src/types/monitor.ts` file
+
+### Requirement: Toast notification for switching operations
+The system SHALL provide transient toast notifications for input switching operations.
+
+#### Scenario: Switch in progress
+- **WHEN** the user initiates an input switch
+- **THEN** the system SHALL display a toast with a spinner and "正在切换输入源..." message at the bottom of the window
+
+#### Scenario: Switch success
+- **WHEN** the input switch completes successfully
+- **THEN** the system SHALL display a green success toast for 2.5 seconds
+
+#### Scenario: Switch warning (no signal)
+- **WHEN** the switch command succeeds but the monitor's actual input does not match the target
+- **THEN** the system SHALL display an amber warning toast for 4 seconds indicating the target port may have no signal
+
+#### Scenario: Switch failure
+- **WHEN** the switch command fails
+- **THEN** the system SHALL display a red error toast for 4 seconds with the error message
+
+### Requirement: Concurrent switch protection
+The system SHALL prevent concurrent DDC/CI switch operations.
+
+#### Scenario: Rapid clicks
+- **WHEN** the user clicks a switch button while another switch operation is in progress
+- **THEN** the system SHALL ignore the second click and not initiate a new DDC/CI command
+
+#### Scenario: Silent refresh after switch
+- **WHEN** a switch operation completes
+- **THEN** the system SHALL refresh monitor state silently (without showing the loading skeleton)
+
+### Requirement: Hot-plug detection
+The system SHALL automatically detect monitor connection/disconnection events.
+
+#### Scenario: Polling interval
+- **WHEN** the application window is visible and no switch operation is in progress
+- **THEN** the system SHALL poll for monitor changes every 5 seconds
+
+#### Scenario: Window hidden
+- **WHEN** the application window is hidden (minimized or backgrounded)
+- **THEN** the system SHALL pause polling to reduce resource usage
+
+#### Scenario: Window restored
+- **WHEN** the application window becomes visible again
+- **THEN** the system SHALL resume polling
+
+### Requirement: Active input indication on buttons
+The system SHALL clearly indicate the currently active input source on the button itself.
+
+#### Scenario: Active input button
+- **WHEN** an input source button corresponds to the monitor's current input
+- **THEN** the button SHALL display a green pulsing dot, the input name, and a "当前" label
+
+#### Scenario: Inactive input button
+- **WHEN** an input source button does not correspond to the current input
+- **THEN** the button SHALL use outline styling without active indicators
+
+### Requirement: Retry detection button
+The system SHALL provide a retry mechanism when monitor detection fails or returns empty.
+
+#### Scenario: Detection error
+- **WHEN** monitor detection fails with an error
+- **THEN** the error alert SHALL include a "重新检测" button
+
+#### Scenario: Empty state
+- **WHEN** no monitors are detected
+- **THEN** the empty state display SHALL include a "重新检测" button
+
+### Requirement: No scrollbars in small windows
+The system SHALL display content without scrollbars when the window is small.
+
+#### Scenario: Small window
+- **WHEN** the application window is resized to a small size
+- **THEN** the content SHALL be fully visible without horizontal or vertical scrollbars
+- **AND** the main content area SHALL use overflow-y-auto with hidden scrollbar styling

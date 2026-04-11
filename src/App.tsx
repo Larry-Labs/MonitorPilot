@@ -19,6 +19,7 @@ function App() {
   const [customNames, setCustomNames] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<ToastState>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const switchLock = useRef(false);
 
   const showToast = useCallback((state: NonNullable<ToastState>, duration?: number) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -94,12 +95,15 @@ function App() {
   }, [silentRefresh, switching]);
 
   const handleSwitch = async (monitorIndex: number, inputValue: number) => {
+    if (switchLock.current) return;
+    switchLock.current = true;
+
     const key = `${monitorIndex}-${inputValue}`;
     setSwitching(key);
     showToast({ type: "switching", message: "正在切换输入源..." });
     try {
       const result = await invoke<string>("cmd_switch_input", { monitorIndex, inputValue });
-      await refreshMonitors();
+      await silentRefresh();
       const isWarning = result.includes("仍为") || result.includes("无法验证");
       showToast(
         { type: isWarning ? "warning" : "success", message: result },
@@ -108,6 +112,7 @@ function App() {
     } catch (e) {
       showToast({ type: "error", message: String(e) }, 4000);
     } finally {
+      switchLock.current = false;
       setSwitching(null);
     }
   };
