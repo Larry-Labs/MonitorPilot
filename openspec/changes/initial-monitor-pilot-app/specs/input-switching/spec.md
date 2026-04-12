@@ -5,7 +5,7 @@ The system SHALL switch a monitor's input source by writing to VCP code 0x60 via
 
 #### Scenario: Successful input switch
 - **WHEN** the user selects a target input source for a specific monitor
-- **THEN** the system SHALL write the corresponding VCP value to code 0x60 and verify the switch within 600ms
+- **THEN** the system SHALL write the corresponding VCP value to code 0x60 and verify the switch (macOS: 2-round verification at ~0.6s and ~2.0s; Linux/Windows: single verification at ~0.6s)
 
 #### Scenario: Switch to already active input
 - **WHEN** the user requests switching to the input source that is already active
@@ -19,11 +19,11 @@ The system SHALL switch a monitor's input source by writing to VCP code 0x60 via
 The system SHALL verify the actual monitor input after each switch command via DDC readback.
 
 #### Scenario: DDC confirms target input
-- **WHEN** the DDC readback after 600ms matches the target input value
+- **WHEN** the DDC readback matches the target input value after all verification rounds
 - **THEN** the system SHALL return `status: "success"`
 
 #### Scenario: DDC confirms different input (target port rejected)
-- **WHEN** the DDC readback after 600ms returns a value different from the target
+- **WHEN** the DDC readback at any verification round returns a value different from the target
 - **THEN** the system SHALL return `status: "warning"` with a message indicating the target port may have no signal, and report the actual current input
 
 #### Scenario: DDC unreachable after switch (monitor lost)
@@ -31,7 +31,7 @@ The system SHALL verify the actual monitor input after each switch command via D
 - **THEN** the system SHALL attempt automatic rollback to the previous input value, report the outcome, and return an error
 
 ### Requirement: Optimistic UI update (frontend)
-The system SHALL update the UI immediately after dispatching a switch command, without waiting for polling.
+The system SHALL update the UI immediately after the backend returns a successful switch result, without waiting for polling.
 
 #### Scenario: Backend returns success
 - **WHEN** the backend returns `status: "success"`
@@ -45,17 +45,22 @@ The system SHALL update the UI immediately after dispatching a switch command, w
 - **WHEN** the backend returns an error
 - **THEN** the frontend SHALL NOT apply an optimistic update and SHALL show the error message
 
-### Requirement: Post-switch auto-revert detection (frontend)
-The system SHALL detect when a monitor automatically reverts from a successfully-switched input source (indicating the target port has no signal).
+### Requirement: Post-switch silent UI correction (frontend)
+The system SHALL silently correct the UI when a monitor automatically reverts from a successfully-switched input source (indicating the target port has no signal).
 
-#### Scenario: Monitor auto-reverts within polling window
-- **WHEN** a switch was reported as successful, BUT a subsequent poll (within 15 seconds) detects the monitor's `current_input` has changed away from the target
-- **THEN** the frontend SHALL show a warning toast: "{target} 可能无信号，显示器已回退到 {actual}" and update the UI to reflect the actual state
+#### Scenario: Monitor auto-reverts after successful switch
+- **WHEN** a switch was reported as successful, BUT a subsequent poll detects the monitor's `current_input` has changed away from the target
+- **THEN** the frontend SHALL silently update the UI button states to reflect the actual input, WITHOUT showing an additional warning toast
 
 #### Scenario: DDC/CI limitation — no-signal port accepted by firmware
 - **GIVEN** some monitors accept DDC switch commands to ports that physically exist but have no cable connected (e.g., HDMI-2 with no cable) while rejecting commands to ports that don't exist (e.g., DP-2 on a single-DP monitor)
 - **WHEN** a switch to such a port is reported as "success" by the backend
-- **THEN** the frontend's auto-revert detection SHALL catch the monitor's eventual revert and warn the user, providing consistent feedback regardless of which unconnected port was targeted
+- **THEN** the frontend's polling cycle SHALL detect the monitor's eventual revert and silently update the UI, providing a consistent experience where the button state self-corrects within one polling interval (~3 seconds)
+
+#### Scenario: Monitor firmware determines revert target
+- **GIVEN** when a monitor auto-reverts from a no-signal port, its firmware decides the revert target (typically the first port with an active signal, e.g., DP-1), which may differ from the user's previous input
+- **WHEN** the polling detects the actual input after a revert
+- **THEN** the frontend SHALL display the actual input reported by DDC, and SHALL NOT send additional DDC commands to switch to the previous input (to avoid screen flashing)
 
 ### Requirement: Custom input source naming
 The system SHALL allow users to assign custom names to input sources for each monitor.

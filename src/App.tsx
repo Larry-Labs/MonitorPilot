@@ -30,8 +30,6 @@ function App() {
   const switchLock = useRef(false);
   const switchingRef = useRef<string | null>(null);
   const lastMonitorCount = useRef(0);
-  const monitorsRef = useRef(monitors);
-  monitorsRef.current = monitors;
   const customNamesRef = useRef(customNames);
   customNamesRef.current = customNames;
 
@@ -73,15 +71,6 @@ function App() {
   const monitorsJsonRef = useRef("");
   const POLL_FAIL_THRESHOLD = 3;
   const EMPTY_POLL_THRESHOLD = 2;
-  const lastSwitchRef = useRef<{
-    monitorIndex: number;
-    targetInput: number;
-    previousInput: number | null;
-    timestamp: number;
-  } | null>(null);
-  const REVERT_DETECT_WINDOW_MS = 15000;
-  const VERIFY_DELAY_MS = 4000;
-  const ROLLBACK_SETTLE_MS = 1500;
   const TOAST_SHORT_MS = 2500;
   const TOAST_LONG_MS = 4000;
 
@@ -96,27 +85,6 @@ function App() {
         }
       } else {
         emptyPollCount.current = 0;
-      }
-
-      const sw = lastSwitchRef.current;
-      if (sw && Date.now() - sw.timestamp < REVERT_DETECT_WINDOW_MS) {
-        const mon = result.monitors.find(m => m.index === sw.monitorIndex);
-        if (mon && mon.current_input != null && mon.current_input !== sw.targetInput) {
-          lastSwitchRef.current = null;
-          if (!switchingRef.current) {
-            const targetName = mon.supported_inputs.find(i => i.value === sw.targetInput)?.name
-              ?? `Input-0x${sw.targetInput.toString(16).toUpperCase().padStart(2, "0")}`;
-
-            const actualName = (mon.current_input != null && mon.current_input_name !== "未知")
-              ? (mon.supported_inputs.find(i => i.value === mon.current_input)?.name ?? mon.current_input_name)
-              : null;
-
-            const msg = actualName
-              ? `${targetName} 可能无信号，显示器已回退到 ${actualName}`
-              : `${targetName} 可能无信号，显示器已回退`;
-            showToast({ type: "warning", message: msg }, TOAST_LONG_MS);
-          }
-        }
       }
 
       const newJson = JSON.stringify(result.monitors);
@@ -216,9 +184,6 @@ function App() {
     }
     switchLock.current = true;
 
-    const currentMonitor = monitorsRef.current.find(m => m.index === monitorIndex);
-    const previousInput = currentMonitor?.current_input ?? null;
-
     const key = `${monitorIndex}-${inputValue}`;
     setSwitching(key);
     switchingRef.current = key;
@@ -236,65 +201,12 @@ function App() {
         monitorsJsonRef.current = "";
       }
 
-      lastSwitchRef.current = isWarning ? null : {
-        monitorIndex,
-        targetInput: inputValue,
-        previousInput,
-        timestamp: Date.now(),
-      };
-
-      showToast({ type: "switching", message: "正在验证切换状态..." });
-      await new Promise(r => setTimeout(r, VERIFY_DELAY_MS));
-      await silentRefresh();
-
       if (isWarning) {
         showToast({ type: "warning", message: result.message }, TOAST_LONG_MS);
-      } else if (lastSwitchRef.current !== null) {
-        lastSwitchRef.current = null;
+      } else {
         showToast({ type: "success", message: result.message }, TOAST_SHORT_MS);
-      } else if (previousInput != null) {
-        const prevName = currentMonitor?.supported_inputs.find(i => i.value === previousInput)?.name
-          ?? `Input-0x${previousInput.toString(16).toUpperCase().padStart(2, "0")}`;
-        const targetName = currentMonitor?.supported_inputs.find(i => i.value === inputValue)?.name
-          ?? `Input-0x${inputValue.toString(16).toUpperCase().padStart(2, "0")}`;
-
-        try {
-          const checkResult = await invoke<MonitorListResult>("cmd_get_monitors");
-          const mon = checkResult.monitors.find(m => m.index === monitorIndex);
-          setMonitors(checkResult.monitors);
-          monitorsJsonRef.current = JSON.stringify(checkResult.monitors);
-
-          if (mon?.current_input === previousInput) {
-            showToast({ type: "warning", message: `${targetName} 无信号，已自动恢复到 ${prevName}` }, TOAST_LONG_MS);
-          } else if (mon?.current_input != null && mon.current_input !== inputValue) {
-            const actualName = mon.supported_inputs.find(i => i.value === mon.current_input)?.name ?? mon.current_input_name;
-            showToast({ type: "warning", message: `${targetName} 无信号，当前输入为 ${actualName}` }, TOAST_LONG_MS);
-          } else {
-            showToast({ type: "switching", message: "目标端口无信号，正在恢复..." });
-            try {
-              await invoke<SwitchResult>("cmd_switch_input", { monitorIndex, inputValue: previousInput });
-            } catch { /* continue to verify */ }
-            await new Promise(r => setTimeout(r, ROLLBACK_SETTLE_MS));
-            try {
-              const finalResult = await invoke<MonitorListResult>("cmd_get_monitors");
-              const finalMon = finalResult.monitors.find(m => m.index === monitorIndex);
-              setMonitors(finalResult.monitors);
-              monitorsJsonRef.current = JSON.stringify(finalResult.monitors);
-              if (finalMon?.current_input === previousInput) {
-                showToast({ type: "warning", message: `${targetName} 无信号，已恢复到 ${prevName}` }, TOAST_LONG_MS);
-              } else {
-                showToast({ type: "warning", message: `${targetName} 无信号，显示器状态不确定` }, TOAST_LONG_MS);
-              }
-            } catch {
-              showToast({ type: "warning", message: `${targetName} 无信号，已尝试恢复到 ${prevName}` }, TOAST_LONG_MS);
-            }
-          }
-        } catch {
-          showToast({ type: "warning", message: `${targetName} 无信号，无法确认当前状态` }, TOAST_LONG_MS);
-        }
       }
     } catch (e) {
-      lastSwitchRef.current = null;
       showToast({ type: "error", message: String(e) }, TOAST_LONG_MS);
     } finally {
       switchLock.current = false;
@@ -302,7 +214,7 @@ function App() {
       setSwitching(null);
       monitorsJsonRef.current = "";
     }
-  }, [showToast, silentRefresh]);
+  }, [showToast]);
 
   const handleRename = useCallback(async (key: string, name: string) => {
     const previous = { ...customNamesRef.current };

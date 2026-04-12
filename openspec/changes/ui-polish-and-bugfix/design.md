@@ -103,17 +103,18 @@ MonitorPilot v0.1.0 已完成核心功能（显示器检测、输入切换、系
 - `useRef` 是同步更新的，可作为可靠的并发门控
 - DDC/CI 是串行总线协议，并发发送命令会导致通信失败
 
-### 9. 切换后验证：等待 + 读回
+### 9. 切换后验证：多轮等待 + 读回 + 前端静默修正
 
-**选择**：各平台切换后等待 600ms（`POST_SWITCH_VERIFY_DELAY_MS`），再次读取当前输入状态进行验证
+**选择**：macOS 两轮验证（600ms + 1400ms，总计约 2s），Linux/Windows 单次验证（600ms）。前端采用乐观更新 + 轮询静默修正。
 
 **理由**：
 - DDC/CI `set` 命令可能成功发送但显示器未实际切换（如目标端口无信号）
-- 等待 600ms 给显示器足够的响应时间
-- 验证结果分三种：完全成功、仍在原输入（无信号警告）、无法验证（尝试回滚）
-- macOS 通过 m1ddc CLI 读回，Linux/Windows 通过 ddc-hi `get_vcp_feature` 读回
-- 用户不再被误导性的"切换成功"消息困扰
-- 后端返回结构化 `SwitchResult { status, message }`，前端按 status 字段（"success"/"warning"）选择提示类型
+- macOS 两轮验证捕获大部分固件立即拒绝和短延迟回退场景
+- Linux/Windows 单次 600ms 验证覆盖基本场景
+- 验证结果分三种：完全成功（success）、目标端口无信号（warning）、DDC 通信中断（error + 尝试回滚）
+- 前端收到 success 后乐观更新 UI，若后续轮询发现显示器因无信号自动回退，**静默修正按钮状态，不弹额外 Toast**
+- 显示器自动回退的目标由固件决定（通常是第一个有信号端口），应用不发送冗余 DDC 命令避免屏幕闪烁
+- 后端返回结构化 `SwitchResult { status, message }`，前端按 status 字段选择提示类型
 
 ### 10. 后端 DDC 操作互斥锁
 

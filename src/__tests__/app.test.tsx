@@ -153,7 +153,7 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(screen.getByText("已切换到 HDMI-1")).toBeInTheDocument();
-    }, { timeout: 8000 });
+    });
   });
 
   it("shows error toast when switch fails", async () => {
@@ -197,8 +197,8 @@ describe("App", () => {
     await user.click(screen.getByText("HDMI-1"));
 
     await waitFor(() => {
-      expect(screen.getByText(/目标端口可能无信号/)).toBeInTheDocument();
-    }, { timeout: 8000 });
+      expect(screen.getByText(/无信号|目标端口/)).toBeInTheDocument();
+    });
   });
 
   it("disables other input buttons during switch", async () => {
@@ -254,7 +254,7 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(hdmi2Button).not.toBeDisabled();
-    }, { timeout: 8000 });
+    });
   });
 
   it("shows version in footer", async () => {

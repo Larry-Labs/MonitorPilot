@@ -319,65 +319,74 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResul
         return Err(format!("切换失败: {}", trimmed));
     }
 
-    log::debug!("切换命令已发送，等待 {}ms 验证...", POST_SWITCH_VERIFY_DELAY_MS);
-    std::thread::sleep(std::time::Duration::from_millis(POST_SWITCH_VERIFY_DELAY_MS));
+    // Two-round verification: reads at ~0.6s and ~2.0s after command
+    // Catches immediate firmware rejection and short-delay auto-revert
+    let verify_delays: &[u64] = &[600, 1400];
+    log::debug!("切换命令已发送，开始多轮验证 ({}轮)", verify_delays.len());
 
-    match macos_get_input(display_num) {
-        Some(actual) if actual == input_value => {
-            log::info!("切换成功: 显示器 #{} → {}", display_num, input_name(input_value));
-            Ok(SwitchResult {
-                status: "success".to_string(),
-                message: format!("已切换到 {}", input_name(input_value)),
-            })
-        }
-        Some(actual) => {
-            log::warn!(
-                "切换未生效: 目标 {} 实际 {} — 目标端口可能无信号",
-                input_name(input_value),
-                input_name(actual)
-            );
-            Ok(SwitchResult {
-                status: "warning".to_string(),
-                message: format!(
-                    "已发送切换指令到 {}，但显示器当前仍为 {}（目标端口可能无信号）",
-                    input_name(input_value),
-                    input_name(actual)
-                ),
-            })
-        }
-        None => {
-            log::warn!(
-                "切换后显示器不可达，尝试回滚到 {:?}",
-                previous_input.map(input_name)
-            );
-            if let Some(prev) = previous_input {
-                let prev_str = prev.to_string();
-                let rollback = run_m1ddc(&["set", "input", &prev_str, "-d", &disp_str]);
+    for (round, &delay) in verify_delays.iter().enumerate() {
+        std::thread::sleep(Duration::from_millis(delay));
 
-                match rollback {
-                    Ok(r) if r.status.success() => {
-                        std::thread::sleep(std::time::Duration::from_millis(POST_SWITCH_VERIFY_DELAY_MS));
-                        let recovered = macos_get_input(display_num);
-                        if recovered == Some(prev) {
-                            log::info!("回滚成功: 已恢复到 {}", input_name(prev));
-                            return Err(format!(
-                                "切换到 {} 后显示器失联，已自动恢复到 {}",
-                                input_name(input_value),
-                                input_name(prev)
-                            ));
-                        }
-                        log::warn!("回滚命令已发送但无法确认结果");
-                    }
-                    Ok(_) => log::error!("回滚命令执行失败"),
-                    Err(e) => log::error!("回滚命令发送失败: {}", e),
-                }
+        match macos_get_input(display_num) {
+            Some(actual) if actual == input_value => {
+                log::debug!("验证第{}轮: 确认目标输入 {}", round + 1, input_name(input_value));
             }
-            Err(format!(
-                "切换到 {} 后显示器失联（DDC/CI 通信中断），请检查线缆连接",
-                input_name(input_value)
-            ))
+            Some(actual) => {
+                log::warn!(
+                    "验证第{}轮: 检测到输入变化 {} → {} — 目标端口可能无信号",
+                    round + 1, input_name(input_value), input_name(actual)
+                );
+                return Ok(SwitchResult {
+                    status: "warning".to_string(),
+                    message: format!(
+                        "{} 无信号，显示器已自动恢复到 {}",
+                        input_name(input_value), input_name(actual)
+                    ),
+                });
+            }
+            None if round == 0 => {
+                log::warn!(
+                    "切换后显示器不可达，尝试回滚到 {:?}",
+                    previous_input.map(input_name)
+                );
+                if let Some(prev) = previous_input {
+                    let prev_str = prev.to_string();
+                    let rollback = run_m1ddc(&["set", "input", &prev_str, "-d", &disp_str]);
+                    match rollback {
+                        Ok(r) if r.status.success() => {
+                            std::thread::sleep(Duration::from_millis(POST_SWITCH_VERIFY_DELAY_MS));
+                            if macos_get_input(display_num) == Some(prev) {
+                                log::info!("回滚成功: 已恢复到 {}", input_name(prev));
+                                return Err(format!(
+                                    "切换到 {} 后显示器失联，已自动恢复到 {}",
+                                    input_name(input_value), input_name(prev)
+                                ));
+                            }
+                            log::warn!("回滚命令已发送但无法确认结果");
+                        }
+                        Ok(_) => log::error!("回滚命令执行失败"),
+                        Err(e) => log::error!("回滚命令发送失败: {}", e),
+                    }
+                }
+                return Err(format!(
+                    "切换到 {} 后显示器失联（DDC/CI 通信中断），请检查线缆连接",
+                    input_name(input_value)
+                ));
+            }
+            None => {
+                log::debug!("验证第{}轮: DDC暂时不可达，跳过", round + 1);
+            }
         }
     }
+
+    log::info!(
+        "切换成功: 显示器 #{} → {} ({}轮验证通过)",
+        display_num, input_name(input_value), verify_delays.len()
+    );
+    Ok(SwitchResult {
+        status: "success".to_string(),
+        message: format!("已切换到 {}", input_name(input_value)),
+    })
 }
 
 // --- Linux/Windows: use ddc-hi ---
