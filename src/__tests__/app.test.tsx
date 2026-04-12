@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import App from "../App";
 
@@ -89,7 +89,7 @@ describe("App", () => {
     });
   });
 
-  it("shows error alert when detection fails", async () => {
+  it("shows error alert with guidance when detection fails and monitors empty", async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "cmd_get_monitors") return { monitors: [], error: "m1ddc not found" };
       if (cmd === "cmd_get_config") return mockConfig;
@@ -98,6 +98,7 @@ describe("App", () => {
     render(<App />);
     await waitFor(() => {
       expect(screen.getByText(/m1ddc not found/)).toBeInTheDocument();
+      expect(screen.getByText("未检测到 DDC/CI 兼容显示器")).toBeInTheDocument();
     });
   });
 
@@ -109,11 +110,12 @@ describe("App", () => {
     });
     render(<App />);
     await waitFor(() => {
-      expect(screen.getByText("重新检测")).toBeInTheDocument();
+      const buttons = screen.getAllByText("重新检测");
+      expect(buttons.length).toBeGreaterThanOrEqual(1);
     });
   });
 
-  it("switches input and shows toast", async () => {
+  it("switches input and shows success toast", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -128,6 +130,32 @@ describe("App", () => {
         monitorIndex: 1,
         inputValue: 0x11,
       });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("已切换到 HDMI-1")).toBeInTheDocument();
+    });
+  });
+
+  it("shows error toast when switch fails", async () => {
+    mockInvoke.mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd === "cmd_get_monitors") return mockMonitorListResult;
+      if (cmd === "cmd_get_config") return mockConfig;
+      if (cmd === "cmd_switch_input") throw new Error("切换失败: DDC 通信中断");
+      return undefined;
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("HDMI-1"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/切换失败/)).toBeInTheDocument();
     });
   });
 
@@ -154,10 +182,152 @@ describe("App", () => {
     });
   });
 
+  it("shows 'busy' toast on rapid switch clicks", async () => {
+    const threeInputMonitors = {
+      monitors: [{
+        ...mockMonitorListResult.monitors[0],
+        supported_inputs: [
+          { value: 0x0f, name: "DP-1" },
+          { value: 0x11, name: "HDMI-1" },
+          { value: 0x12, name: "HDMI-2" },
+        ],
+      }],
+      error: null,
+    };
+
+    let resolveSwitch: ((v: unknown) => void) | undefined;
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "cmd_get_monitors") return threeInputMonitors;
+      if (cmd === "cmd_get_config") return mockConfig;
+      if (cmd === "cmd_switch_input") {
+        return new Promise((resolve) => { resolveSwitch = resolve; });
+      }
+      return undefined;
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("HDMI-1"));
+
+    await waitFor(() => {
+      expect(screen.getByText("正在切换输入源...")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("HDMI-2"));
+
+    await waitFor(() => {
+      expect(screen.getByText("操作进行中，请稍候...")).toBeInTheDocument();
+    });
+
+    resolveSwitch!({ status: "success", message: "已切换到 HDMI-1" });
+  });
+
   it("shows version in footer", async () => {
     render(<App />);
     await waitFor(() => {
       expect(screen.getByText(/MonitorPilot v/)).toBeInTheDocument();
+    });
+  });
+});
+
+describe("App — polling", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows warning toast after 3 consecutive poll failures", async () => {
+    let callCount = 0;
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "cmd_get_monitors") {
+        callCount++;
+        if (callCount === 1) return mockMonitorListResult;
+        throw new Error("poll error");
+      }
+      if (cmd === "cmd_get_config") return mockConfig;
+      return undefined;
+    });
+
+    render(<App />);
+    await act(async () => {});
+
+    expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+
+    for (let i = 0; i < 3; i++) {
+      act(() => { vi.advanceTimersByTime(5000); });
+      await act(async () => {});
+    }
+
+    expect(screen.getByText(/显示器状态同步异常/)).toBeInTheDocument();
+  }, 15000);
+
+  it("does not clear monitors when poll returns empty but monitors exist", async () => {
+    let callCount = 0;
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "cmd_get_monitors") {
+        callCount++;
+        if (callCount === 1) return mockMonitorListResult;
+        return { monitors: [], error: null };
+      }
+      if (cmd === "cmd_get_config") return mockConfig;
+      return undefined;
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+  });
+});
+
+describe("App — rename", () => {
+  it("rolls back custom name on save failure", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "cmd_get_monitors") return mockMonitorListResult;
+      if (cmd === "cmd_get_config") return { input_names: { "1-15": "MyDP" } };
+      if (cmd === "cmd_save_config") throw new Error("保存失败");
+      return undefined;
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+    });
+
+    const editBtn = screen.getByLabelText("编辑 MyDP 的名称");
+    await user.click(editBtn);
+
+    const input = screen.getByRole("textbox");
+    await user.clear(input);
+    await user.type(input, "NewName");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(screen.getByText(/保存失败/)).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      const matches = screen.getAllByText("MyDP");
+      expect(matches.length).toBeGreaterThanOrEqual(1);
     });
   });
 });

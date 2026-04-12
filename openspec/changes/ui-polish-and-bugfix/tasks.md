@@ -178,3 +178,18 @@
 - [x] 22.6 更新 lib.rs、tray.rs、App.tsx、types/monitor.ts 全链路对齐
 - [x] 22.7 更新测试：SwitchResult 类型测试、warning 场景测试
 - [x] 22.8 文档同步：README、design、proposal、spec 全部反映全平台验证和结构化返回
+
+## 23. 深度审查修复（5 轮并行审查）
+
+- [x] 23.1 P0: CI workflow 为非 macOS 平台创建 m1ddc sidecar 占位文件，macOS x86_64 复制 aarch64 二进制
+- [x] 23.2 P1: CI 拆分 test + release 两个 job，test 在 push/PR 时触发，release 在 tag 时触发
+- [x] 23.3 P1: CI 添加 `npm test`、`cargo test`、`tsc --noEmit`、`cargo clippy` 质量门禁
+- [x] 23.4 P1: Linux/Windows 未找到显示器错误消息统一为 "切换失败: 未找到显示器 #N" 格式
+- [x] 23.5 P1: Linux/Windows 日志 "共检测到 N 台外接显示器" 与 macOS 对齐
+- [x] 23.6 P1: error + 空列表同时显示错误 Alert 和排查引导（移除 `!error` 条件）
+- [x] 23.7 P1: silentRefresh 通过 JSON 比较避免无变化时触发 React 重渲染（memo 优化生效）
+- [x] 23.8 P1: silentRefresh 防清空路径也重置 pollFailCount
+- [x] 23.9 P2: 所有装饰性 SVG 添加 `aria-hidden="true"`（App.tsx + monitor-card.tsx）
+- [x] 23.10 P2: package.json 添加 `engines: { node: ">=20" }`
+- [x] 23.11 P1: 补充前端测试：切换失败错误 toast、快速连点互斥 toast、轮询连续失败 toast、防清空逻辑、重命名回滚
+- [x] 23.12 验证所有测试通过：19 Rust + 37 前端，cargo clippy 零警告

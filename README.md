@@ -68,7 +68,7 @@ npm run test:watch
 cd src-tauri && cargo test
 ```
 
-前端共 32 个测试（App 生命周期、MonitorCard 交互、类型定义），后端共 19 个测试（输入映射、配置持久化、m1ddc 解析）。
+前端共 37 个测试（App 生命周期/切换/轮询/重命名、MonitorCard 交互、类型定义），后端共 19 个测试（输入映射、配置持久化、m1ddc 解析）。CI 在每次 push/PR 时自动运行测试、类型检查和 clippy。
 
 ## 分发格式
 

@@ -381,7 +381,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
         });
     }
 
-    log::info!("共检测到 {} 台显示器", monitors.len());
+    log::info!("共检测到 {} 台外接显示器", monitors.len());
     Ok(monitors)
 }
 
@@ -399,7 +399,7 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResul
         .nth(monitor_index)
         .ok_or_else(|| {
             log::error!("未找到显示器 #{}", monitor_index);
-            format!("未找到 Monitor {}", monitor_index)
+            format!("切换失败: 未找到显示器 #{}", monitor_index)
         })?;
 
     let previous_input = display
