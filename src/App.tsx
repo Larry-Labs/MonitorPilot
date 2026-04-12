@@ -298,6 +298,7 @@ function App() {
       switchLock.current = false;
       switchingRef.current = null;
       setSwitching(null);
+      monitorsJsonRef.current = "";
     }
   }, [showToast, silentRefresh]);
 
