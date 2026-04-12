@@ -250,6 +250,7 @@ function App() {
       if (isWarning) {
         showToast({ type: "warning", message: result.message }, TOAST_LONG_MS);
       } else if (lastSwitchRef.current !== null) {
+        lastSwitchRef.current = null;
         showToast({ type: "success", message: result.message }, TOAST_SHORT_MS);
       } else if (previousInput != null) {
         const prevName = currentMonitor?.supported_inputs.find(i => i.value === previousInput)?.name
