@@ -101,7 +101,7 @@ function App() {
       const sw = lastSwitchRef.current;
       if (sw && Date.now() - sw.timestamp < REVERT_DETECT_WINDOW_MS) {
         const mon = result.monitors.find(m => m.index === sw.monitorIndex);
-        if (mon && mon.current_input !== sw.targetInput) {
+        if (mon && mon.current_input != null && mon.current_input !== sw.targetInput) {
           lastSwitchRef.current = null;
           if (!switchingRef.current) {
             const targetName = mon.supported_inputs.find(i => i.value === sw.targetInput)?.name
@@ -121,11 +121,15 @@ function App() {
 
       const newJson = JSON.stringify(result.monitors);
       if (newJson !== monitorsJsonRef.current) {
-        setMonitors(result.monitors);
-        monitorsJsonRef.current = newJson;
+        if (!switchingRef.current) {
+          setMonitors(result.monitors);
+          monitorsJsonRef.current = newJson;
+        }
       }
       lastMonitorCount.current = result.monitors.length;
-      setError(result.error || null);
+      if (!switchingRef.current) {
+        setError(result.error || null);
+      }
       pollFailCount.current = 0;
     } catch (e) {
       pollFailCount.current += 1;
