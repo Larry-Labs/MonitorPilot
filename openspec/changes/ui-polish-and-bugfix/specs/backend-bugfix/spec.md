@@ -39,16 +39,16 @@ The project SHALL track `package-lock.json` in Git.
 The system SHALL verify the actual input state after sending a switch command on all platforms (macOS via m1ddc, Linux/Windows via ddc-hi get_vcp_feature).
 
 #### Scenario: Successful switch
-- **WHEN** a switch command is sent and the monitor's current input matches the target after 500ms
-- **THEN** the system SHALL return a success message
+- **WHEN** a switch command is sent and the monitor's current input matches the target after 600ms
+- **THEN** the system SHALL return a `SwitchResult` with `status: "success"`
 
-#### Scenario: Target port no signal
-- **WHEN** a switch command is sent but the monitor's current input still shows the previous input after 500ms
-- **THEN** the system SHALL return a warning message indicating the target port may have no signal
+#### Scenario: Target port no signal (immediate rejection)
+- **WHEN** a switch command is sent but the monitor's current input still shows the previous input after 600ms
+- **THEN** the system SHALL return a `SwitchResult` with `status: "warning"` indicating the target port may have no signal
 
-#### Scenario: Verification unavailable
-- **WHEN** a switch command is sent but the current input cannot be read after 500ms
-- **THEN** the system SHALL return a message indicating verification was not possible
+#### Scenario: Monitor unreachable after switch
+- **WHEN** a switch command is sent but DDC readback returns None after 600ms
+- **THEN** the system SHALL attempt rollback to the previous input and return an error message
 
 ### Requirement: Built-in display filtering
 The system SHALL filter out built-in laptop displays from the monitor list.

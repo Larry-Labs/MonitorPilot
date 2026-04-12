@@ -11,7 +11,7 @@ use crate::monitor::{get_monitors, switch_input};
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    let menu = build_tray_menu(app)?;
+    let menu = build_initial_tray_menu(app)?;
 
     let icon = app
         .default_window_icon()
@@ -29,7 +29,45 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .build(app)?;
 
     log::info!("系统托盘初始化完成");
+
+    let app_handle = app.clone();
+    std::thread::spawn(move || {
+        refresh_tray(&app_handle);
+    });
+
     Ok(())
+}
+
+fn build_initial_tray_menu(
+    app: &AppHandle,
+) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn std::error::Error>> {
+    let mut builder = MenuBuilder::new(app);
+
+    let title = MenuItemBuilder::with_id(
+        "title",
+        format!("MonitorPilot v{} — Larry Gao", APP_VERSION),
+    )
+    .build(app)?;
+    builder = builder.item(&title);
+
+    builder = builder.separator();
+
+    let loading = MenuItemBuilder::with_id("loading", "正在检测显示器...")
+        .enabled(false)
+        .build(app)?;
+    builder = builder.item(&loading);
+
+    builder = builder.separator();
+
+    let settings = MenuItemBuilder::with_id("settings", "打开主界面...").build(app)?;
+    builder = builder.item(&settings);
+
+    builder = builder.separator();
+
+    let quit = MenuItemBuilder::with_id("quit", "退出 MonitorPilot").build(app)?;
+    builder = builder.item(&quit);
+
+    Ok(builder.build()?)
 }
 
 fn build_tray_menu(

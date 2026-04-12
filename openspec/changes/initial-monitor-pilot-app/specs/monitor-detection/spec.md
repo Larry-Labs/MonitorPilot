@@ -30,3 +30,20 @@ The system SHALL read the current active input source of each detected monitor.
 #### Scenario: Monitor is in standby
 - **WHEN** the monitor is in standby or powered off
 - **THEN** the system SHALL indicate the monitor status as unavailable and skip input source reading
+
+### Requirement: Real-time display change detection
+The system SHALL detect physical display connect/disconnect events in real-time where platform APIs allow.
+
+#### Scenario: Cable plugged in or unplugged (macOS)
+- **WHEN** a display cable is physically connected or disconnected on macOS
+- **THEN** the system SHALL detect the change via CoreGraphics `CGDisplayRegisterReconfigurationCallback` and refresh the monitor list within ~1 second
+
+#### Scenario: Cable plugged in or unplugged (Windows/Linux)
+- **WHEN** a display cable is physically connected or disconnected on Windows or Linux
+- **THEN** the system SHALL detect the change via periodic polling (3-second interval) and refresh the monitor list
+
+#### Scenario: Display standby/wake
+- **WHEN** a connected monitor enters standby or wakes up
+- **THEN** the system SHALL detect the state change via polling and update the UI accordingly
+
+> **实现说明**：macOS 使用 `CGDisplayRegisterReconfigurationCallback` 原生回调检测 display add/remove 事件，延迟 <1 秒。该回调不覆盖显示器休眠/唤醒（macOS 不认为是 display 变化），这些场景由 3 秒轮询兜底。Windows/Linux 暂未实现原生监听，完全依赖轮询。

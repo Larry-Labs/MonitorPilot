@@ -1,4 +1,5 @@
 mod config;
+mod display_observer;
 mod monitor;
 mod tray;
 
@@ -98,6 +99,16 @@ pub fn run() {
             app.manage(config_manager);
 
             tray::setup_tray(app.handle())?;
+            display_observer::start(app.handle());
+
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(e) = window.show() {
+                    log::warn!("启动时显示窗口失败: {}", e);
+                }
+                if let Err(e) = window.set_focus() {
+                    log::warn!("启动时聚焦窗口失败: {}", e);
+                }
+            }
 
             Ok(())
         })

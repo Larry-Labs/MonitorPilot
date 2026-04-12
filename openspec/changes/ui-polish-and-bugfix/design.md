@@ -74,19 +74,25 @@ MonitorPilot v0.1.0 已完成核心功能（显示器检测、输入切换、系
 - 四种状态（蓝紫/绿/琥珀/红）颜色编码让用户快速识别结果
 - useRef 管理 timer 防止内存泄漏
 
-### 7. 热插拔检测：定时轮询 + 可见性控制
+### 7. 热插拔检测：原生事件 + 轮询兜底
 
-**选择**：每 5 秒静默轮询 `cmd_get_monitors`，窗口不可见时暂停
+**选择**：macOS 使用 CoreGraphics 原生回调实现实时检测，3 秒轮询作为跨平台兜底方案
 
-**备选方案**：
-- OS 级设备事件监听（CoreGraphics/udev/WMI）：实时性好但实现复杂度高
+**架构**：
+- **macOS**：`CGDisplayRegisterReconfigurationCallback` 监听 display add/remove 事件（`kCGDisplayAddFlag` / `kCGDisplayRemoveFlag`），触发后通过 Tauri `emit("display-changed")` 通知前端立即刷新。延迟 <1 秒
+- **Windows/Linux**：暂无原生监听，依赖 3 秒轮询
+- **所有平台**：3 秒静默轮询 `cmd_get_monitors`，窗口不可见时暂停（`document.visibilitychange`），切换操作期间自动暂停
+
+**备选方案（已弃用）**：
+- 纯轮询（5 秒）：延迟 3-6 秒，体验差
+- 第三方 crate（`display-config`）：仅支持 macOS/Windows，且引入外部依赖
 - 用户手动刷新：无额外开销但体验差
 
 **理由**：
-- DDC/CI 读取操作非常快（本地 I2C 总线），5 秒轮询开销可忽略
-- `document.visibilitychange` 事件避免后台无效轮询
-- 切换操作期间自动暂停轮询，避免 DDC 总线冲突
-- 实现简单，不依赖平台特定 API
+- CoreGraphics 回调是 macOS 原生 API，零额外依赖，注册后自动集成到 Tauri 的 CFRunLoop
+- 原生回调只覆盖物理插拔，不覆盖显示器休眠/唤醒，轮询补充这部分场景
+- `OnceLock<AppHandle>` 保证线程安全且仅注册一次
+- 前端通过 `listen("display-changed")` 监听后端事件，与轮询互补互不冲突
 
 ### 8. 并发切换保护：useRef 互斥锁
 
@@ -99,11 +105,11 @@ MonitorPilot v0.1.0 已完成核心功能（显示器检测、输入切换、系
 
 ### 9. 切换后验证：等待 + 读回
 
-**选择**：各平台切换后等待 500ms（`POST_SWITCH_VERIFY_DELAY_MS`），再次读取当前输入状态进行验证
+**选择**：各平台切换后等待 600ms（`POST_SWITCH_VERIFY_DELAY_MS`），再次读取当前输入状态进行验证
 
 **理由**：
 - DDC/CI `set` 命令可能成功发送但显示器未实际切换（如目标端口无信号）
-- 等待 500ms 给显示器足够的响应时间
+- 等待 600ms 给显示器足够的响应时间
 - 验证结果分三种：完全成功、仍在原输入（无信号警告）、无法验证（尝试回滚）
 - macOS 通过 m1ddc CLI 读回，Linux/Windows 通过 ddc-hi `get_vcp_feature` 读回
 - 用户不再被误导性的"切换成功"消息困扰
@@ -129,10 +135,10 @@ MonitorPilot v0.1.0 已完成核心功能（显示器检测、输入切换、系
 
 ## Risks / Trade-offs
 
-- **[暗色模式闪烁]** → 首次加载时可能出现白屏到暗色的闪烁。**缓解**：在 `index.html` 中内联检测脚本，提前设置 `dark` 类。
+- **[暗色模式闪烁]** → 首次加载时可能出现白屏到暗色的闪烁。**缓解**：在 `index.html` 中引入外部 `theme.js` 脚本，提前设置 `dark` 类。
 - **[Skeleton 组件闪烁]** → 加载极快时骨架屏一闪而过。**缓解**：设置最小显示时间 200ms 或接受快速闪烁（优于无反馈）。
 - **[托盘 id 修复]** → 需确认 Tauri Rust API 中 `TrayIconBuilder` 的 id 设置方法名。**缓解**：查阅 Tauri 2 文档确认。
-- **[轮询精度]** → 5 秒间隔意味着热插拔后最多等 5 秒 UI 才更新。**缓解**：对于工具类应用，这个延迟是可以接受的，且用户可点击"重新检测"立即刷新。
-- **[切换后验证延迟]** → 500ms 等待增加了切换操作的响应时间。**缓解**：已有 Toast "正在切换" 提示，用户不会感到操作无响应。
+- **[轮询精度]** → 3 秒轮询间隔意味着非原生平台热插拔后最多等 3 秒 UI 才更新。macOS 原生检测延迟 <1 秒。
+- **[切换后验证延迟]** → 600ms 等待增加了切换操作的响应时间。**缓解**：已有 Toast "正在切换" 提示，用户不会感到操作无响应。
 - **[DDC 总线冲突]** → 轮询和切换同时操作可能导致总线错误。**缓解**：切换期间暂停轮询；前端互斥锁防止并发切换；后端 DDC_LOCK 作为最终保障。
 - **[CSP 限制]** → 严格的 CSP 策略可能阻止第三方资源加载。**缓解**：已配置 `style-src 'unsafe-inline'` 兼容 Tailwind 内联样式，仅允许 `self` 和 `asset:` 协议。

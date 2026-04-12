@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { MonitorCard } from "./components/monitor-card";
 import { MonitorCardSkeleton } from "./components/monitor-card-skeleton";
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert";
@@ -29,6 +30,8 @@ function App() {
   const switchLock = useRef(false);
   const switchingRef = useRef<string | null>(null);
   const lastMonitorCount = useRef(0);
+  const monitorsRef = useRef(monitors);
+  monitorsRef.current = monitors;
   const customNamesRef = useRef(customNames);
   customNamesRef.current = customNames;
 
@@ -55,7 +58,9 @@ function App() {
         setError(result.error);
       }
       setMonitors(result.monitors);
+      monitorsJsonRef.current = JSON.stringify(result.monitors);
       lastMonitorCount.current = result.monitors.length;
+      emptyPollCount.current = 0;
     } catch (e) {
       setError(String(e));
     } finally {
@@ -64,16 +69,56 @@ function App() {
   }, []);
 
   const pollFailCount = useRef(0);
+  const emptyPollCount = useRef(0);
   const monitorsJsonRef = useRef("");
   const POLL_FAIL_THRESHOLD = 3;
+  const EMPTY_POLL_THRESHOLD = 2;
+  const lastSwitchRef = useRef<{
+    monitorIndex: number;
+    targetInput: number;
+    previousInput: number | null;
+    timestamp: number;
+  } | null>(null);
+  const REVERT_DETECT_WINDOW_MS = 15000;
+  const VERIFY_DELAY_MS = 2000;
+  const ROLLBACK_SETTLE_MS = 1500;
+  const TOAST_SHORT_MS = 2500;
+  const TOAST_LONG_MS = 4000;
 
   const silentRefresh = useCallback(async () => {
     try {
       const result = await invoke<MonitorListResult>("cmd_get_monitors");
       if (result.monitors.length === 0 && lastMonitorCount.current > 0) {
-        pollFailCount.current = 0;
-        return;
+        emptyPollCount.current += 1;
+        if (emptyPollCount.current < EMPTY_POLL_THRESHOLD) {
+          pollFailCount.current = 0;
+          return;
+        }
+      } else {
+        emptyPollCount.current = 0;
       }
+
+      const sw = lastSwitchRef.current;
+      if (sw && Date.now() - sw.timestamp < REVERT_DETECT_WINDOW_MS) {
+        const mon = result.monitors.find(m => m.index === sw.monitorIndex);
+        if (mon && mon.current_input !== sw.targetInput) {
+          lastSwitchRef.current = null;
+          if (!switchingRef.current) {
+            const targetName = mon.supported_inputs.find(i => i.value === sw.targetInput)?.name
+              ?? `Input-0x${sw.targetInput.toString(16).toUpperCase().padStart(2, "0")}`;
+
+            const actualName = (mon.current_input != null && mon.current_input_name !== "未知")
+              ? (mon.supported_inputs.find(i => i.value === mon.current_input)?.name ?? mon.current_input_name)
+              : null;
+
+            const msg = actualName
+              ? `${targetName} 可能无信号，显示器已回退到 ${actualName}`
+              : `${targetName} 可能无信号，显示器已回退`;
+            showToast({ type: "warning", message: msg }, TOAST_LONG_MS);
+          }
+        }
+      }
+
       const newJson = JSON.stringify(result.monitors);
       if (newJson !== monitorsJsonRef.current) {
         setMonitors(result.monitors);
@@ -86,7 +131,7 @@ function App() {
       pollFailCount.current += 1;
       console.warn(`轮询检测失败 (${pollFailCount.current}/${POLL_FAIL_THRESHOLD}):`, e);
       if (pollFailCount.current >= POLL_FAIL_THRESHOLD) {
-        showToast({ type: "warning", message: "显示器状态同步异常，数据可能不是最新的" }, 4000);
+        showToast({ type: "warning", message: "显示器状态同步异常，数据可能不是最新的" }, TOAST_LONG_MS);
         pollFailCount.current = 0;
       }
     }
@@ -104,7 +149,26 @@ function App() {
   }, [refreshMonitors]);
 
   useEffect(() => {
-    const POLL_INTERVAL = 5000;
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+    listen("display-changed", () => {
+      console.log("[MonitorPilot] 收到显示器变化事件");
+      if (!switchingRef.current) refreshMonitors();
+    }).then(fn => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [refreshMonitors]);
+
+  useEffect(() => {
+    const POLL_INTERVAL = 3000;
     let timer: ReturnType<typeof setInterval>;
 
     const startPolling = () => {
@@ -115,7 +179,10 @@ function App() {
 
     const handleVisibility = () => {
       clearInterval(timer);
-      if (!document.hidden) startPolling();
+      if (!document.hidden) {
+        if (!switchingRef.current) silentRefresh();
+        startPolling();
+      }
     };
 
     startPolling();
@@ -129,10 +196,13 @@ function App() {
 
   const handleSwitch = useCallback(async (monitorIndex: number, inputValue: number) => {
     if (switchLock.current) {
-      showToast({ type: "switching", message: "操作进行中，请稍候..." }, 1500);
+      showToast({ type: "switching", message: "操作进行中，请稍候..." }, TOAST_SHORT_MS);
       return;
     }
     switchLock.current = true;
+
+    const currentMonitor = monitorsRef.current.find(m => m.index === monitorIndex);
+    const previousInput = currentMonitor?.current_input ?? null;
 
     const key = `${monitorIndex}-${inputValue}`;
     setSwitching(key);
@@ -140,14 +210,75 @@ function App() {
     showToast({ type: "switching", message: "正在切换输入源..." });
     try {
       const result = await invoke<SwitchResult>("cmd_switch_input", { monitorIndex, inputValue });
-      await silentRefresh();
       const isWarning = result.status === "warning";
-      showToast(
-        { type: isWarning ? "warning" : "success", message: result.message },
-        isWarning ? 4000 : 2500
-      );
+
+      if (!isWarning) {
+        setMonitors(prev => prev.map(m =>
+          m.index === monitorIndex
+            ? { ...m, current_input: inputValue }
+            : m
+        ));
+        monitorsJsonRef.current = "";
+      }
+
+      lastSwitchRef.current = isWarning ? null : {
+        monitorIndex,
+        targetInput: inputValue,
+        previousInput,
+        timestamp: Date.now(),
+      };
+
+      showToast({ type: "switching", message: "正在验证切换状态..." });
+      await new Promise(r => setTimeout(r, VERIFY_DELAY_MS));
+      await silentRefresh();
+
+      if (isWarning) {
+        showToast({ type: "warning", message: result.message }, TOAST_LONG_MS);
+      } else if (lastSwitchRef.current !== null) {
+        showToast({ type: "success", message: result.message }, TOAST_SHORT_MS);
+      } else if (previousInput != null) {
+        const prevName = currentMonitor?.supported_inputs.find(i => i.value === previousInput)?.name
+          ?? `Input-0x${previousInput.toString(16).toUpperCase().padStart(2, "0")}`;
+        const targetName = currentMonitor?.supported_inputs.find(i => i.value === inputValue)?.name
+          ?? `Input-0x${inputValue.toString(16).toUpperCase().padStart(2, "0")}`;
+
+        showToast({ type: "switching", message: "目标端口无信号，正在恢复..." });
+        try {
+          await invoke<SwitchResult>("cmd_switch_input", {
+            monitorIndex,
+            inputValue: previousInput,
+          });
+        } catch {
+          // Backend verification might fail during transition, continue to check actual state
+        }
+
+        await new Promise(r => setTimeout(r, ROLLBACK_SETTLE_MS));
+        try {
+          const checkResult = await invoke<MonitorListResult>("cmd_get_monitors");
+          const mon = checkResult.monitors.find(m => m.index === monitorIndex);
+          setMonitors(checkResult.monitors);
+          monitorsJsonRef.current = JSON.stringify(checkResult.monitors);
+          if (mon?.current_input === previousInput) {
+            showToast({ type: "warning", message: `${targetName} 无信号，已自动恢复到 ${prevName}` }, TOAST_LONG_MS);
+          } else {
+            const actualName = mon?.current_input != null
+              ? (mon.supported_inputs.find(i => i.value === mon.current_input)?.name ?? mon.current_input_name)
+              : null;
+            showToast({
+              type: "warning",
+              message: actualName
+                ? `${targetName} 无信号，当前输入为 ${actualName}`
+                : `${targetName} 无信号，显示器状态不确定`,
+            }, TOAST_LONG_MS);
+          }
+        } catch {
+          showToast({ type: "warning", message: `${targetName} 无信号，已尝试恢复到 ${prevName}` }, TOAST_LONG_MS);
+          silentRefresh();
+        }
+      }
     } catch (e) {
-      showToast({ type: "error", message: String(e) }, 4000);
+      lastSwitchRef.current = null;
+      showToast({ type: "error", message: String(e) }, TOAST_LONG_MS);
     } finally {
       switchLock.current = false;
       switchingRef.current = null;
@@ -169,7 +300,7 @@ function App() {
       await invoke("cmd_save_config", { config: { input_names: updated } });
     } catch (e) {
       setCustomNames(previous);
-      showToast({ type: "error", message: String(e) }, 3000);
+      showToast({ type: "error", message: String(e) }, TOAST_LONG_MS);
     }
   }, [showToast]);
 
@@ -250,7 +381,7 @@ function App() {
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-primary mt-0.5">•</span>
-                    <span>DP 或 HDMI 线缆已正确连接</span>
+                    <span>视频线缆已正确连接（DP / HDMI / DVI / VGA / USB-C）</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-primary mt-0.5">•</span>
@@ -294,8 +425,8 @@ function App() {
 
       {toast && (
         <div
-          role="status"
-          aria-live="polite"
+          role={toast.type === "error" ? "alert" : "status"}
+          aria-live={toast.type === "error" ? "assertive" : "polite"}
           className={`mx-4 mb-2 px-3.5 py-2.5 rounded-lg text-xs font-medium flex items-center gap-2.5 border ${TOAST_COLORS[toast.type]}`}
         >
           {toast.type === "switching" && (

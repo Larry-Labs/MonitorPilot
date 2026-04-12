@@ -3,7 +3,7 @@ import { Skeleton } from "./ui/skeleton";
 
 export function MonitorCardSkeleton() {
   return (
-    <Card className="border-border/60">
+    <Card className="border-border/60" aria-busy="true" aria-label="正在加载显示器信息">
       <CardHeader className="pb-3 pt-4 px-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

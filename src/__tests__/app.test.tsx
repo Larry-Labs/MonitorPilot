@@ -116,6 +116,25 @@ describe("App", () => {
   });
 
   it("switches input and shows success toast", async () => {
+    let switched = false;
+    const switchedResult = {
+      monitors: [{
+        ...mockMonitorListResult.monitors[0],
+        current_input: 0x11,
+        current_input_name: "HDMI-1",
+      }],
+      error: null,
+    };
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "cmd_get_monitors") return switched ? switchedResult : mockMonitorListResult;
+      if (cmd === "cmd_get_config") return mockConfig;
+      if (cmd === "cmd_switch_input") {
+        switched = true;
+        return { status: "success", message: "已切换到 HDMI-1" };
+      }
+      return undefined;
+    });
+
     const user = userEvent.setup();
     render(<App />);
 
@@ -134,11 +153,11 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(screen.getByText("已切换到 HDMI-1")).toBeInTheDocument();
-    });
+    }, { timeout: 5000 });
   });
 
   it("shows error toast when switch fails", async () => {
-    mockInvoke.mockImplementation(async (cmd: string, args?: unknown) => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "cmd_get_monitors") return mockMonitorListResult;
       if (cmd === "cmd_get_config") return mockConfig;
       if (cmd === "cmd_switch_input") throw new Error("切换失败: DDC 通信中断");
@@ -179,10 +198,10 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/目标端口可能无信号/)).toBeInTheDocument();
-    });
+    }, { timeout: 5000 });
   });
 
-  it("shows 'busy' toast on rapid switch clicks", async () => {
+  it("disables other input buttons during switch", async () => {
     const threeInputMonitors = {
       monitors: [{
         ...mockMonitorListResult.monitors[0],
@@ -194,10 +213,19 @@ describe("App", () => {
       }],
       error: null,
     };
+    const switchedMonitors = {
+      monitors: [{
+        ...threeInputMonitors.monitors[0],
+        current_input: 0x11,
+        current_input_name: "HDMI-1",
+      }],
+      error: null,
+    };
 
     let resolveSwitch: ((v: unknown) => void) | undefined;
+    let switched = false;
     mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === "cmd_get_monitors") return threeInputMonitors;
+      if (cmd === "cmd_get_monitors") return switched ? switchedMonitors : threeInputMonitors;
       if (cmd === "cmd_get_config") return mockConfig;
       if (cmd === "cmd_switch_input") {
         return new Promise((resolve) => { resolveSwitch = resolve; });
@@ -218,13 +246,15 @@ describe("App", () => {
       expect(screen.getByText("正在切换输入源...")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText("HDMI-2"));
+    const hdmi2Button = screen.getByRole("button", { name: /切换到 HDMI-2/ });
+    expect(hdmi2Button).toBeDisabled();
+
+    switched = true;
+    resolveSwitch!({ status: "success", message: "已切换到 HDMI-1" });
 
     await waitFor(() => {
-      expect(screen.getByText("操作进行中，请稍候...")).toBeInTheDocument();
-    });
-
-    resolveSwitch!({ status: "success", message: "已切换到 HDMI-1" });
+      expect(hdmi2Button).not.toBeDisabled();
+    }, { timeout: 5000 });
   });
 
   it("shows version in footer", async () => {
@@ -262,7 +292,7 @@ describe("App — polling", () => {
     expect(screen.getByText("Test Monitor")).toBeInTheDocument();
 
     for (let i = 0; i < 3; i++) {
-      act(() => { vi.advanceTimersByTime(5000); });
+      act(() => { vi.advanceTimersByTime(3000); });
       await act(async () => {});
     }
 
@@ -290,7 +320,7 @@ describe("App — polling", () => {
     expect(screen.getByText("Test Monitor")).toBeInTheDocument();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000);
+      await vi.advanceTimersByTimeAsync(3000);
     });
 
     expect(screen.getByText("Test Monitor")).toBeInTheDocument();

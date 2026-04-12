@@ -1,13 +1,16 @@
 use serde::Serialize;
-use std::process::Command;
+use std::io::Read;
+use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 static DDC_LOCK: Mutex<()> = Mutex::new(());
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 const VCP_INPUT_SOURCE: u8 = 0x60;
 
-const POST_SWITCH_VERIFY_DELAY_MS: u64 = 500;
+const POST_SWITCH_VERIFY_DELAY_MS: u64 = 600;
+const M1DDC_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Serialize, Clone, Debug)]
 pub struct InputSource {
@@ -42,8 +45,16 @@ fn input_name(value: u8) -> String {
         0x12 => "HDMI-2".to_string(),
         0x13 => "HDMI-3".to_string(),
         0x14 => "HDMI-4".to_string(),
+        0x1B => "USB-C".to_string(),
         v => format!("Input-0x{:02X}", v),
     }
+}
+
+fn is_known_input(value: u8) -> bool {
+    matches!(
+        value,
+        0x01 | 0x02 | 0x03 | 0x04 | 0x0F | 0x10 | 0x11 | 0x12 | 0x13 | 0x14 | 0x1B
+    )
 }
 
 fn supported_inputs_with_current(current: Option<u8>) -> Vec<InputSource> {
@@ -58,13 +69,10 @@ fn supported_inputs_with_current(current: Option<u8>) -> Vec<InputSource> {
 
     if let Some(cur) = current {
         if !defaults.contains(&cur) {
-            inputs.insert(
-                0,
-                InputSource {
-                    value: cur,
-                    name: input_name(cur),
-                },
-            );
+            inputs.push(InputSource {
+                value: cur,
+                name: input_name(cur),
+            });
         }
     }
 
@@ -75,6 +83,48 @@ fn supported_inputs_with_current(current: Option<u8>) -> Vec<InputSource> {
 
 #[cfg(target_os = "macos")]
 static M1DDC_PATH: OnceLock<String> = OnceLock::new();
+
+#[cfg(target_os = "macos")]
+fn run_m1ddc(args: &[&str]) -> Result<std::process::Output, String> {
+    let m1ddc = find_m1ddc();
+    let mut child = Command::new(m1ddc)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("无法执行 m1ddc: {}。请确认已安装: brew install m1ddc", e))?;
+
+    let deadline = Instant::now() + M1DDC_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut stdout = Vec::new();
+                let mut stderr = Vec::new();
+                if let Some(mut out) = child.stdout.take() {
+                    let _ = out.read_to_end(&mut stdout);
+                }
+                if let Some(mut err) = child.stderr.take() {
+                    let _ = err.read_to_end(&mut stderr);
+                }
+                return Ok(std::process::Output { status, stdout, stderr });
+            }
+            Ok(None) => {
+                if Instant::now() > deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    log::error!("m1ddc 执行超时 ({}s)，已强制终止", M1DDC_TIMEOUT.as_secs());
+                    return Err("m1ddc 响应超时，请检查显示器连接".to_string());
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("等待 m1ddc 退出失败: {}", e));
+            }
+        }
+    }
+}
 
 #[cfg(target_os = "macos")]
 fn find_m1ddc() -> &'static str {
@@ -98,10 +148,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
     let m1ddc = find_m1ddc();
     log::debug!("m1ddc 路径: {}", m1ddc);
 
-    let output = Command::new(m1ddc)
-        .args(["display", "list"])
-        .output()
-        .map_err(|e| format!("无法执行 m1ddc: {}。请确认已安装: brew install m1ddc", e))?;
+    let output = run_m1ddc(&["display", "list"])?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -193,11 +240,7 @@ fn parse_m1ddc_line(line: &str) -> (u32, String) {
 
 #[cfg(target_os = "macos")]
 fn macos_get_input(display_num: u32) -> Option<u8> {
-    let m1ddc = find_m1ddc();
-    let output = Command::new(m1ddc)
-        .args(["get", "input", "-d", &display_num.to_string()])
-        .output()
-        .ok()?;
+    let output = run_m1ddc(&["get", "input", "-d", &display_num.to_string()]).ok()?;
 
     if !output.status.success() {
         log::debug!("读取显示器 #{} 输入失败: 退出码 {}", display_num, output.status);
@@ -205,9 +248,23 @@ fn macos_get_input(display_num: u32) -> Option<u8> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let value = stdout.trim().parse::<u8>().ok();
+    let trimmed = stdout.trim();
+    let value = trimmed.parse::<u8>().ok().or_else(|| {
+        trimmed.parse::<i32>().ok().and_then(|v| {
+            if (0..=255).contains(&v) {
+                Some(v as u8)
+            } else {
+                log::debug!("显示器 #{} 返回超范围值: {}，忽略", display_num, v);
+                None
+            }
+        })
+    });
     if value.is_none() {
-        log::debug!("解析显示器 #{} 输入值失败: {:?}", display_num, stdout.trim());
+        log::debug!("解析显示器 #{} 输入值失败: {:?}", display_num, trimmed);
+    } else if let Some(v) = value {
+        if !is_known_input(v) {
+            log::debug!("显示器 #{} 返回非标准输入值: 0x{:02X}", display_num, v);
+        }
     }
     value
 }
@@ -218,7 +275,6 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResul
         .lock()
         .map_err(|_| "DDC 操作正忙，请稍后重试".to_string())?;
 
-    let m1ddc = find_m1ddc();
     let display_num = monitor_index as u32;
 
     let previous_input = macos_get_input(display_num);
@@ -234,18 +290,12 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResul
             .unwrap_or_else(|| "N/A".to_string())
     );
 
-    let output = Command::new(m1ddc)
-        .args([
-            "set",
-            "input",
-            &input_value.to_string(),
-            "-d",
-            &display_num.to_string(),
-        ])
-        .output()
+    let val_str = input_value.to_string();
+    let disp_str = display_num.to_string();
+    let output = run_m1ddc(&["set", "input", &val_str, "-d", &disp_str])
         .map_err(|e| {
             log::error!("m1ddc 执行失败: {}", e);
-            format!("无法执行 m1ddc: {}", e)
+            format!("切换失败: {}", e)
         })?;
 
     if !output.status.success() {
@@ -264,7 +314,7 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResul
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let trimmed = stdout.trim();
-    if trimmed.contains("Could not find") || trimmed.contains("error") {
+    if trimmed.contains("Could not find") || trimmed.starts_with("Error") || trimmed.starts_with("error:") {
         log::error!("m1ddc 返回错误: {}", trimmed);
         return Err(format!("切换失败: {}", trimmed));
     }
@@ -301,15 +351,8 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResul
                 previous_input.map(input_name)
             );
             if let Some(prev) = previous_input {
-                let rollback = Command::new(m1ddc)
-                    .args([
-                        "set",
-                        "input",
-                        &prev.to_string(),
-                        "-d",
-                        &display_num.to_string(),
-                    ])
-                    .output();
+                let prev_str = prev.to_string();
+                let rollback = run_m1ddc(&["set", "input", &prev_str, "-d", &disp_str]);
 
                 match rollback {
                     Ok(r) if r.status.success() => {
@@ -524,12 +567,24 @@ mod tests {
     }
 
     #[test]
-    fn supported_inputs_with_unknown_current_prepends() {
+    fn supported_inputs_with_unknown_current_appends() {
         let inputs = supported_inputs_with_current(Some(0x6E));
         assert_eq!(inputs.len(), 5);
-        assert_eq!(inputs[0].value, 0x6E);
-        assert_eq!(inputs[0].name, "Input-0x6E");
-        assert_eq!(inputs[1].value, 0x0F);
+        assert_eq!(inputs[0].value, 0x0F);
+        assert_eq!(inputs[4].value, 0x6E);
+        assert_eq!(inputs[4].name, "Input-0x6E");
+    }
+
+    #[test]
+    fn is_known_input_validates_standard_values() {
+        assert!(is_known_input(0x0F));
+        assert!(is_known_input(0x10));
+        assert!(is_known_input(0x11));
+        assert!(is_known_input(0x12));
+        assert!(is_known_input(0x1B));
+        assert!(!is_known_input(0x63));
+        assert!(!is_known_input(0x00));
+        assert!(!is_known_input(0xFF));
     }
 
     #[cfg(target_os = "macos")]

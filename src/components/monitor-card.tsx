@@ -73,6 +73,7 @@ export const MonitorCard = memo(function MonitorCard({ monitor, switching, custo
             const isActive = monitor.current_input === input.value;
             const switchKey = `${monitor.index}-${input.value}`;
             const isSwitching = switching === switchKey;
+            const isAnySwitching = switching !== null;
             const isEditing = editingKey === switchKey;
             const displayName = getDisplayName(input);
 
@@ -110,7 +111,7 @@ export const MonitorCard = memo(function MonitorCard({ monitor, switching, custo
                       ? "shadow-md shadow-primary/20"
                       : "hover:border-primary/40 hover:bg-primary/5 hover:text-primary dark:hover:bg-primary/10"
                   }`}
-                  disabled={isSwitching}
+                  disabled={isSwitching || (isAnySwitching && !isActive)}
                   onClick={() => {
                     if (!isActive) {
                       onSwitch(monitor.index, input.value);
@@ -136,6 +137,7 @@ export const MonitorCard = memo(function MonitorCard({ monitor, switching, custo
                   )}
                 </Button>
                 <button
+                  type="button"
                   className="absolute -top-1.5 -right-1.5 flex items-center justify-center w-5 h-5 rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-primary hover:border-primary/40 transition-all duration-150 opacity-0 group-hover:opacity-100 focus:opacity-100"
                   onClick={(e) => {
                     e.stopPropagation();
