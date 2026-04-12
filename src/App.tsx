@@ -258,38 +258,39 @@ function App() {
         const targetName = currentMonitor?.supported_inputs.find(i => i.value === inputValue)?.name
           ?? `Input-0x${inputValue.toString(16).toUpperCase().padStart(2, "0")}`;
 
-        showToast({ type: "switching", message: "目标端口无信号，正在恢复..." });
-        try {
-          await invoke<SwitchResult>("cmd_switch_input", {
-            monitorIndex,
-            inputValue: previousInput,
-          });
-        } catch {
-          // Backend verification might fail during transition, continue to check actual state
-        }
-
-        await new Promise(r => setTimeout(r, ROLLBACK_SETTLE_MS));
         try {
           const checkResult = await invoke<MonitorListResult>("cmd_get_monitors");
           const mon = checkResult.monitors.find(m => m.index === monitorIndex);
           setMonitors(checkResult.monitors);
           monitorsJsonRef.current = JSON.stringify(checkResult.monitors);
+
           if (mon?.current_input === previousInput) {
             showToast({ type: "warning", message: `${targetName} 无信号，已自动恢复到 ${prevName}` }, TOAST_LONG_MS);
+          } else if (mon?.current_input != null && mon.current_input !== inputValue) {
+            const actualName = mon.supported_inputs.find(i => i.value === mon.current_input)?.name ?? mon.current_input_name;
+            showToast({ type: "warning", message: `${targetName} 无信号，当前输入为 ${actualName}` }, TOAST_LONG_MS);
           } else {
-            const actualName = mon?.current_input != null
-              ? (mon.supported_inputs.find(i => i.value === mon.current_input)?.name ?? mon.current_input_name)
-              : null;
-            showToast({
-              type: "warning",
-              message: actualName
-                ? `${targetName} 无信号，当前输入为 ${actualName}`
-                : `${targetName} 无信号，显示器状态不确定`,
-            }, TOAST_LONG_MS);
+            showToast({ type: "switching", message: "目标端口无信号，正在恢复..." });
+            try {
+              await invoke<SwitchResult>("cmd_switch_input", { monitorIndex, inputValue: previousInput });
+            } catch { /* continue to verify */ }
+            await new Promise(r => setTimeout(r, ROLLBACK_SETTLE_MS));
+            try {
+              const finalResult = await invoke<MonitorListResult>("cmd_get_monitors");
+              const finalMon = finalResult.monitors.find(m => m.index === monitorIndex);
+              setMonitors(finalResult.monitors);
+              monitorsJsonRef.current = JSON.stringify(finalResult.monitors);
+              if (finalMon?.current_input === previousInput) {
+                showToast({ type: "warning", message: `${targetName} 无信号，已恢复到 ${prevName}` }, TOAST_LONG_MS);
+              } else {
+                showToast({ type: "warning", message: `${targetName} 无信号，显示器状态不确定` }, TOAST_LONG_MS);
+              }
+            } catch {
+              showToast({ type: "warning", message: `${targetName} 无信号，已尝试恢复到 ${prevName}` }, TOAST_LONG_MS);
+            }
           }
         } catch {
-          showToast({ type: "warning", message: `${targetName} 无信号，已尝试恢复到 ${prevName}` }, TOAST_LONG_MS);
-          silentRefresh();
+          showToast({ type: "warning", message: `${targetName} 无信号，无法确认当前状态` }, TOAST_LONG_MS);
         }
       }
     } catch (e) {
