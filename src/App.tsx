@@ -150,22 +150,33 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    let unlisten: (() => void) | null = null;
-    listen("display-changed", () => {
+    const listeners: (() => void)[] = [];
+
+    const subscribe = (event: string, handler: () => void) => {
+      listen(event, handler).then(fn => {
+        if (cancelled) {
+          fn();
+        } else {
+          listeners.push(fn);
+        }
+      });
+    };
+
+    subscribe("display-changed", () => {
       console.log("[MonitorPilot] 收到显示器变化事件");
       if (!switchingRef.current) refreshMonitors();
-    }).then(fn => {
-      if (cancelled) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
     });
+
+    subscribe("tray-switch-done", () => {
+      console.log("[MonitorPilot] 收到托盘切换完成事件");
+      silentRefresh();
+    });
+
     return () => {
       cancelled = true;
-      unlisten?.();
+      listeners.forEach(fn => fn());
     };
-  }, [refreshMonitors]);
+  }, [refreshMonitors, silentRefresh]);
 
   useEffect(() => {
     const POLL_INTERVAL = 3000;

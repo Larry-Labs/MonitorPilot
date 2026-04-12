@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder},
     tray::TrayIconBuilder,
-    AppHandle, Manager,
+    AppHandle, Emitter, Manager,
 };
 
 use crate::config::ConfigManager;
@@ -205,6 +205,9 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
                         Err(e) => log::error!("托盘切换失败: {}", e),
                     }
                     refresh_tray(app);
+                    if let Err(e) = app.emit("tray-switch-done", ()) {
+                        log::debug!("通知前端托盘切换完成失败: {}", e);
+                    }
                 } else {
                     log::warn!("托盘菜单 ID 解析失败: {}", id);
                 }
