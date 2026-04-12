@@ -5,7 +5,7 @@ The system SHALL switch a monitor's input source by writing to VCP code 0x60 via
 
 #### Scenario: Successful input switch
 - **WHEN** the user selects a target input source for a specific monitor
-- **THEN** the system SHALL write the corresponding VCP value to code 0x60 and verify the switch (macOS: 2-round verification at ~0.6s and ~2.0s; Linux/Windows: single verification at ~0.6s)
+- **THEN** the system SHALL write the corresponding VCP value to code 0x60 and verify the switch (all platforms: 2-round verification at ~0.6s and ~2.0s)
 
 #### Scenario: Switch to already active input
 - **WHEN** the user requests switching to the input source that is already active

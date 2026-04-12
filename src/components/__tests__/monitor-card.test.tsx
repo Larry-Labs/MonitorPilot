@@ -120,7 +120,7 @@ describe("MonitorCard", () => {
     expect(screen.getByText("Ubuntu")).toBeInTheDocument();
   });
 
-  it("shows spinner when switching", () => {
+  it("disables non-target buttons during switching", () => {
     render(
       <MonitorCard
         monitor={mockMonitor}
@@ -130,21 +130,23 @@ describe("MonitorCard", () => {
         onRename={vi.fn()}
       />,
     );
-    expect(screen.getByText("切换中")).toBeInTheDocument();
+    const dp2Button = screen.getByRole("button", { name: /切换到 DP-2/ });
+    expect(dp2Button).toBeDisabled();
   });
 
-  it("disables button when switching that input", () => {
+  it("keeps active button enabled after optimistic update", () => {
+    const optimisticMonitor = { ...mockMonitor, current_input: 0x11 };
     render(
       <MonitorCard
-        monitor={mockMonitor}
+        monitor={optimisticMonitor}
         switching={"1-17"}
         customNames={{}}
         onSwitch={vi.fn()}
         onRename={vi.fn()}
       />,
     );
-    const switchingButton = screen.getByText("切换中").closest("button");
-    expect(switchingButton).toBeDisabled();
+    const activeButton = screen.getByRole("button", { name: /HDMI-1（当前输入源）/ });
+    expect(activeButton).not.toBeDisabled();
   });
 
   it("enters edit mode on pencil button click", async () => {

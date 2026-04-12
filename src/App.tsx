@@ -69,12 +69,14 @@ function App() {
   const pollFailCount = useRef(0);
   const emptyPollCount = useRef(0);
   const monitorsJsonRef = useRef("");
+  const revertCooldownUntil = useRef(0);
   const POLL_FAIL_THRESHOLD = 3;
   const EMPTY_POLL_THRESHOLD = 2;
   const TOAST_SHORT_MS = 2500;
   const TOAST_LONG_MS = 4000;
 
   const silentRefresh = useCallback(async () => {
+    if (Date.now() < revertCooldownUntil.current) return;
     try {
       const result = await invoke<MonitorListResult>("cmd_get_monitors");
       if (result.monitors.length === 0 && lastMonitorCount.current > 0) {
@@ -187,32 +189,40 @@ function App() {
     const key = `${monitorIndex}-${inputValue}`;
     setSwitching(key);
     switchingRef.current = key;
+
+    let previousMonitors: MonitorInfo[] = [];
+    setMonitors(prev => {
+      previousMonitors = prev;
+      return prev.map(m =>
+        m.index === monitorIndex
+          ? { ...m, current_input: inputValue }
+          : m
+      );
+    });
+    monitorsJsonRef.current = "";
+
     showToast({ type: "switching", message: "正在切换输入源..." });
     try {
       const result = await invoke<SwitchResult>("cmd_switch_input", { monitorIndex, inputValue });
-      const isWarning = result.status === "warning";
 
-      if (!isWarning) {
-        setMonitors(prev => prev.map(m =>
-          m.index === monitorIndex
-            ? { ...m, current_input: inputValue }
-            : m
-        ));
-        monitorsJsonRef.current = "";
-      }
-
-      if (isWarning) {
+      if (result.status === "warning") {
+        setMonitors(previousMonitors);
+        monitorsJsonRef.current = JSON.stringify(previousMonitors);
+        revertCooldownUntil.current = Date.now() + 8000;
         showToast({ type: "warning", message: result.message }, TOAST_LONG_MS);
       } else {
+        monitorsJsonRef.current = "";
         showToast({ type: "success", message: result.message }, TOAST_SHORT_MS);
       }
     } catch (e) {
+      setMonitors(previousMonitors);
+      monitorsJsonRef.current = JSON.stringify(previousMonitors);
+      revertCooldownUntil.current = Date.now() + 8000;
       showToast({ type: "error", message: String(e) }, TOAST_LONG_MS);
     } finally {
       switchLock.current = false;
       switchingRef.current = null;
       setSwitching(null);
-      monitorsJsonRef.current = "";
     }
   }, [showToast]);
 
