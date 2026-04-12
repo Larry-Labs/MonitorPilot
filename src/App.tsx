@@ -80,7 +80,7 @@ function App() {
     timestamp: number;
   } | null>(null);
   const REVERT_DETECT_WINDOW_MS = 15000;
-  const VERIFY_DELAY_MS = 2000;
+  const VERIFY_DELAY_MS = 4000;
   const ROLLBACK_SETTLE_MS = 1500;
   const TOAST_SHORT_MS = 2500;
   const TOAST_LONG_MS = 4000;
