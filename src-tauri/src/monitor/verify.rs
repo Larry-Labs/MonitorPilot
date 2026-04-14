@@ -55,7 +55,6 @@ pub(crate) fn verify_switch(
             }
             None => {
                 log::debug!("验证第{}轮: DDC 暂时不可达，跳过", round + 1);
-                confirmed = false;
             }
         }
     }
