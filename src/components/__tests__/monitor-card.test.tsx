@@ -227,7 +227,7 @@ describe("MonitorCard", () => {
     expect(screen.queryByPlaceholderText("DP-1")).not.toBeInTheDocument();
   });
 
-  it("shows DDC controls toggle when monitor has DDC data", () => {
+  it("shows DDC controls when monitor has DDC data", () => {
     const monitorWithDdc = { ...mockMonitor, brightness: 50, contrast: 70 };
     render(
       <MonitorCard
@@ -238,7 +238,8 @@ describe("MonitorCard", () => {
         onRename={vi.fn()}
       />,
     );
-    expect(screen.getByText("显示调节")).toBeInTheDocument();
+    expect(screen.getByText("亮度")).toBeInTheDocument();
+    expect(screen.getByText("对比")).toBeInTheDocument();
   });
 
   it("hides DDC controls toggle when monitor has no DDC data", () => {

@@ -18,7 +18,6 @@ interface MonitorCardProps {
 export const MonitorCard = memo(function MonitorCard({ monitor, switching, customNames, onSwitch, onRename, onDdcError }: MonitorCardProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [showControls, setShowControls] = useState(false);
 
   const hasDdcControls = monitor.brightness !== null || monitor.contrast !== null ||
     monitor.volume !== null || monitor.power_mode !== null;
@@ -176,25 +175,7 @@ export const MonitorCard = memo(function MonitorCard({ monitor, switching, custo
 
         {hasDdcControls && (
           <div className="mt-3">
-            <button
-              type="button"
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => setShowControls((v) => !v)}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24"
-                fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                className={`transition-transform duration-200 ${showControls ? "rotate-90" : ""}`}
-              >
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-              显示调节
-            </button>
-            {showControls && (
-              <div className="mt-2">
-                <DdcControls monitor={monitor} onError={onDdcError} />
-              </div>
-            )}
+            <DdcControls monitor={monitor} onError={onDdcError} />
           </div>
         )}
       </CardContent>
