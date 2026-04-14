@@ -29,6 +29,7 @@ function App() {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const switchLock = useRef(false);
   const switchingRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
   const lastMonitorCount = useRef(0);
   const customNamesRef = useRef(customNames);
   customNamesRef.current = customNames;
@@ -43,6 +44,7 @@ function App() {
 
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, []);
@@ -56,6 +58,7 @@ function App() {
         setError(result.error);
       }
       setMonitors(result.monitors);
+      monitorsSnapshotRef.current = result.monitors;
       monitorsJsonRef.current = JSON.stringify(result.monitors);
       lastMonitorCount.current = result.monitors.length;
       emptyPollCount.current = 0;
@@ -70,6 +73,9 @@ function App() {
   const emptyPollCount = useRef(0);
   const monitorsJsonRef = useRef("");
   const revertCooldownUntil = useRef(0);
+  const pollGeneration = useRef(0);
+  const isPolling = useRef(false);
+  const monitorsSnapshotRef = useRef<MonitorInfo[]>([]);
   const POLL_FAIL_THRESHOLD = 3;
   const EMPTY_POLL_THRESHOLD = 2;
   const TOAST_SHORT_MS = 2500;
@@ -77,8 +83,13 @@ function App() {
 
   const silentRefresh = useCallback(async () => {
     if (Date.now() < revertCooldownUntil.current) return;
+    if (isPolling.current) return;
+    isPolling.current = true;
+    const gen = pollGeneration.current;
     try {
       const result = await invoke<MonitorListResult>("cmd_get_monitors");
+      if (gen !== pollGeneration.current) return;
+
       if (result.monitors.length === 0 && lastMonitorCount.current > 0) {
         emptyPollCount.current += 1;
         if (emptyPollCount.current < EMPTY_POLL_THRESHOLD) {
@@ -92,8 +103,18 @@ function App() {
       const newJson = JSON.stringify(result.monitors);
       if (newJson !== monitorsJsonRef.current) {
         if (!switchingRef.current) {
-          setMonitors(result.monitors);
-          monitorsJsonRef.current = newJson;
+          setMonitors(prev => {
+            const merged = result.monitors.map(newM => {
+              const oldM = prev.find(m => m.index === newM.index);
+              if (newM.current_input == null && oldM?.current_input != null) {
+                return { ...newM, current_input: oldM.current_input, current_input_name: oldM.current_input_name };
+              }
+              return newM;
+            });
+            monitorsSnapshotRef.current = merged;
+            monitorsJsonRef.current = JSON.stringify(merged);
+            return merged;
+          });
         }
       }
       lastMonitorCount.current = result.monitors.length;
@@ -102,12 +123,15 @@ function App() {
       }
       pollFailCount.current = 0;
     } catch (e) {
+      if (gen !== pollGeneration.current) return;
       pollFailCount.current += 1;
       console.warn(`轮询检测失败 (${pollFailCount.current}/${POLL_FAIL_THRESHOLD}):`, e);
       if (pollFailCount.current >= POLL_FAIL_THRESHOLD) {
         showToast({ type: "warning", message: "显示器状态同步异常，数据可能不是最新的" }, TOAST_LONG_MS);
         pollFailCount.current = 0;
       }
+    } finally {
+      isPolling.current = false;
     }
   }, [showToast]);
 
@@ -187,27 +211,47 @@ function App() {
     switchLock.current = true;
 
     const key = `${monitorIndex}-${inputValue}`;
-    setSwitching(key);
+    pollGeneration.current += 1;
     switchingRef.current = key;
 
-    let previousMonitors: MonitorInfo[] = [];
-    setMonitors(prev => {
-      previousMonitors = prev;
-      return prev.map(m =>
-        m.index === monitorIndex
-          ? { ...m, current_input: inputValue }
-          : m
-      );
-    });
+    const previousMonitors = monitorsSnapshotRef.current;
+    setSwitching(key);
+    setMonitors(prev =>
+      prev.map(m => {
+        if (m.index !== monitorIndex) return m;
+        const targetInput = m.supported_inputs.find(i => i.value === inputValue);
+        return {
+          ...m,
+          current_input: inputValue,
+          current_input_name: targetInput?.name ?? m.current_input_name,
+        };
+      })
+    );
     monitorsJsonRef.current = "";
-
     showToast({ type: "switching", message: "正在切换输入源..." });
+    await new Promise(r => setTimeout(r, 50));
+    const switchStart = Date.now();
     try {
       const result = await invoke<SwitchResult>("cmd_switch_input", { monitorIndex, inputValue });
+      if (!mountedRef.current) return;
 
       if (result.status === "warning") {
-        setMonitors(previousMonitors);
-        monitorsJsonRef.current = JSON.stringify(previousMonitors);
+        if (result.actual_input != null) {
+          setMonitors(prev => {
+            const restored = prev.map(m =>
+              m.index === monitorIndex
+                ? { ...m, current_input: result.actual_input! }
+                : m
+            );
+            monitorsSnapshotRef.current = restored;
+            monitorsJsonRef.current = JSON.stringify(restored);
+            return restored;
+          });
+        } else {
+          setMonitors(previousMonitors);
+          monitorsSnapshotRef.current = previousMonitors;
+          monitorsJsonRef.current = JSON.stringify(previousMonitors);
+        }
         revertCooldownUntil.current = Date.now() + 8000;
         showToast({ type: "warning", message: result.message }, TOAST_LONG_MS);
       } else {
@@ -215,14 +259,21 @@ function App() {
         showToast({ type: "success", message: result.message }, TOAST_SHORT_MS);
       }
     } catch (e) {
+      if (!mountedRef.current) return;
       setMonitors(previousMonitors);
+      monitorsSnapshotRef.current = previousMonitors;
       monitorsJsonRef.current = JSON.stringify(previousMonitors);
       revertCooldownUntil.current = Date.now() + 8000;
       showToast({ type: "error", message: String(e) }, TOAST_LONG_MS);
     } finally {
+      const elapsed = Date.now() - switchStart;
+      const MIN_VISUAL_MS = 600;
+      if (elapsed < MIN_VISUAL_MS) {
+        await new Promise(r => setTimeout(r, MIN_VISUAL_MS - elapsed));
+      }
       switchLock.current = false;
       switchingRef.current = null;
-      setSwitching(null);
+      if (mountedRef.current) setSwitching(null);
     }
   }, [showToast]);
 
@@ -237,11 +288,16 @@ function App() {
     setCustomNames(updated);
 
     try {
-      await invoke("cmd_save_config", { config: { input_names: updated } });
+      const existing = await invoke<AppConfig>("cmd_get_config");
+      await invoke("cmd_save_config", { config: { ...existing, input_names: updated } });
     } catch (e) {
       setCustomNames(previous);
       showToast({ type: "error", message: String(e) }, TOAST_LONG_MS);
     }
+  }, [showToast]);
+
+  const handleDdcError = useCallback((msg: string) => {
+    showToast({ type: "error", message: msg }, TOAST_LONG_MS);
   }, [showToast]);
 
   return (
@@ -357,6 +413,7 @@ function App() {
                 customNames={customNames}
                 onSwitch={handleSwitch}
                 onRename={handleRename}
+                onDdcError={handleDdcError}
               />
             ))}
           </div>

@@ -8,6 +8,16 @@ use std::sync::Mutex;
 pub struct AppConfig {
     #[serde(default)]
     pub input_names: HashMap<String, String>,
+    #[serde(default)]
+    pub monitor_order: Vec<String>,
+    #[serde(default)]
+    pub presets: Vec<InputPreset>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct InputPreset {
+    pub name: String,
+    pub inputs: HashMap<String, u16>,
 }
 
 
@@ -83,6 +93,8 @@ mod tests {
     fn app_config_default_is_empty() {
         let config = AppConfig::default();
         assert!(config.input_names.is_empty());
+        assert!(config.monitor_order.is_empty());
+        assert!(config.presets.is_empty());
     }
 
     #[test]
@@ -103,6 +115,48 @@ mod tests {
         let json = "{}";
         let config: AppConfig = serde_json::from_str(json).unwrap();
         assert!(config.input_names.is_empty());
+        assert!(config.monitor_order.is_empty());
+        assert!(config.presets.is_empty());
+    }
+
+    #[test]
+    fn app_config_backward_compatible_with_v1_format() {
+        let json = r#"{"input_names":{"1-15":"MacBook"}}"#;
+        let config: AppConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.input_names["1-15"], "MacBook");
+        assert!(config.presets.is_empty());
+        assert!(config.monitor_order.is_empty());
+    }
+
+    #[test]
+    fn preset_serialization_roundtrip() {
+        let preset = InputPreset {
+            name: "工作模式".to_string(),
+            inputs: [("1".to_string(), 15u16), ("2".to_string(), 17u16)]
+                .into_iter()
+                .collect(),
+        };
+        let json = serde_json::to_string(&preset).unwrap();
+        let deserialized: InputPreset = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.name, "工作模式");
+        assert_eq!(deserialized.inputs["1"], 15);
+        assert_eq!(deserialized.inputs["2"], 17);
+    }
+
+    #[test]
+    fn config_with_presets_roundtrip() {
+        let mut config = AppConfig::default();
+        config.presets.push(InputPreset {
+            name: "办公".to_string(),
+            inputs: [("1".to_string(), 15u16)].into_iter().collect(),
+        });
+        config.monitor_order = vec!["LG ULTRAGEAR".to_string()];
+
+        let json = serde_json::to_string(&config).unwrap();
+        let loaded: AppConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.presets.len(), 1);
+        assert_eq!(loaded.presets[0].name, "办公");
+        assert_eq!(loaded.monitor_order, vec!["LG ULTRAGEAR"]);
     }
 
     #[test]

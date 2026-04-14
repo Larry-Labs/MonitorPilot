@@ -4,7 +4,8 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use super::input_map::{input_name, is_known_input, supported_inputs_with_current};
-use super::types::{MonitorInfo, SwitchResult};
+use super::retry::{read_vcp_with_retry, write_vcp_with_retry, write_input_with_retry};
+use super::types::{MonitorInfo, SwitchResult, VCP_BRIGHTNESS, VCP_CONTRAST, VCP_VOLUME, VCP_POWER_MODE};
 use super::verify::{verify_switch, DdcOps};
 
 const M1DDC_TIMEOUT: Duration = Duration::from_secs(5);
@@ -21,6 +22,39 @@ impl DdcOps for MacOsDdc {
 
     fn write_input(&mut self, value: u8) -> Result<(), String> {
         set_input(self.display_num, value)
+    }
+
+    fn read_vcp(&mut self, code: u8) -> Option<u16> {
+        let attr = vcp_to_m1ddc_attr(code)?;
+        let output = run_m1ddc(&["get", attr, "-d", &self.display_num.to_string()]).ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        stdout.trim().parse::<u16>().ok()
+    }
+
+    fn write_vcp(&mut self, code: u8, value: u16) -> Result<(), String> {
+        let attr = vcp_to_m1ddc_attr(code)
+            .ok_or_else(|| format!("不支持的 VCP 代码: 0x{:02X}", code))?;
+        let val_str = value.to_string();
+        let disp_str = self.display_num.to_string();
+        let output = run_m1ddc(&["set", attr, &val_str, "-d", &disp_str])?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("DDC 写入失败: {}", stderr.trim()));
+        }
+        Ok(())
+    }
+}
+
+fn vcp_to_m1ddc_attr(code: u8) -> Option<&'static str> {
+    match code {
+        0x10 => Some("luminance"),
+        0x12 => Some("contrast"),
+        0x62 => Some("volume"),
+        0xD6 => Some("power"),
+        _ => None,
     }
 }
 
@@ -161,23 +195,28 @@ fn set_input(display_num: u32, value: u8) -> Result<(), String> {
 /// Parse a single m1ddc display list line.
 /// Format: "[N] ModelName (UUID)" or "[N] (null) (UUID)"
 /// Returns (display_num, model_name).
-fn parse_m1ddc_line(line: &str) -> (u32, String) {
-    let mut display_num: u32 = 1;
+fn parse_m1ddc_line(line: &str) -> Option<(u32, String)> {
+    let display_num: u32;
     let rest;
 
     if let Some(stripped) = line.strip_prefix('[') {
         if let Some(bracket_end) = stripped.find(']') {
             let num_str = stripped[..bracket_end].trim();
-            display_num = num_str.parse().unwrap_or_else(|_| {
-                log::warn!("m1ddc 显示器编号解析失败: {:?}，使用默认值 1", num_str);
-                1
-            });
+            display_num = match num_str.parse() {
+                Ok(n) => n,
+                Err(_) => {
+                    log::warn!("m1ddc 显示器编号解析失败: {:?}，跳过此行", num_str);
+                    return None;
+                }
+            };
             rest = stripped[bracket_end + 1..].trim();
         } else {
-            rest = line;
+            log::warn!("m1ddc 输出格式异常（缺少 ']'），跳过: {:?}", line);
+            return None;
         }
     } else {
-        rest = line;
+        log::warn!("m1ddc 输出格式异常（缺少 '['），跳过: {:?}", line);
+        return None;
     }
 
     let name = if let Some(idx) = rest.rfind('(') {
@@ -193,12 +232,19 @@ fn parse_m1ddc_line(line: &str) -> (u32, String) {
         rest.to_string()
     };
 
-    (display_num, name)
+    Some((display_num, name))
 }
 
 // --- Public API ---
 
 pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
+    let _guard = super::DDC_LOCK
+        .lock()
+        .map_err(|e| {
+            log::error!("DDC_LOCK 获取失败 (poison={})", e);
+            "DDC 内部错误，请重启应用".to_string()
+        })?;
+
     let m1ddc = find_m1ddc();
     log::debug!("m1ddc 路径: {}", m1ddc);
 
@@ -220,7 +266,9 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
             continue;
         }
 
-        let (display_num, model) = parse_m1ddc_line(line);
+        let Some((display_num, model)) = parse_m1ddc_line(line) else {
+            continue;
+        };
 
         if model == "内置显示器" {
             log::debug!("跳过内置显示器: display_num={}", display_num);
@@ -237,6 +285,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
                 .unwrap_or_else(|| "未知".to_string())
         );
 
+        let mut ops = MacOsDdc { display_num };
         monitors.push(MonitorInfo {
             index: display_num as usize,
             model,
@@ -245,6 +294,10 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
                 .map(input_name)
                 .unwrap_or_else(|| "未知".to_string()),
             supported_inputs: supported_inputs_with_current(current_input),
+            brightness: read_vcp_with_retry(&mut ops, VCP_BRIGHTNESS),
+            contrast: read_vcp_with_retry(&mut ops, VCP_CONTRAST),
+            volume: read_vcp_with_retry(&mut ops, VCP_VOLUME),
+            power_mode: read_vcp_with_retry(&mut ops, VCP_POWER_MODE).map(|v| v as u8),
         });
     }
 
@@ -255,7 +308,10 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
 pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResult, String> {
     let _guard = super::DDC_LOCK
         .lock()
-        .map_err(|_| "DDC 操作正忙，请稍后重试".to_string())?;
+        .map_err(|e| {
+            log::error!("DDC_LOCK 获取失败 (poison={})", e);
+            "DDC 内部错误，请重启应用".to_string()
+        })?;
 
     let display_num = monitor_index as u32;
     let mut ops = MacOsDdc { display_num };
@@ -273,12 +329,26 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResul
             .unwrap_or_else(|| "N/A".to_string())
     );
 
-    ops.write_input(input_value).map_err(|e| {
+    write_input_with_retry(&mut ops, input_value).map_err(|e| {
         log::error!("切换失败: {}", e);
         format!("切换失败: {}", e)
     })?;
 
     verify_switch(input_value, previous_input, &mut ops)
+}
+
+pub fn set_vcp(monitor_index: usize, code: u8, value: u16) -> Result<(), String> {
+    let _guard = super::DDC_LOCK
+        .lock()
+        .map_err(|e| {
+            log::error!("DDC_LOCK 获取失败 (poison={})", e);
+            "DDC 内部错误，请重启应用".to_string()
+        })?;
+
+    let mut ops = MacOsDdc {
+        display_num: monitor_index as u32,
+    };
+    write_vcp_with_retry(&mut ops, code, value)
 }
 
 #[cfg(test)]
@@ -287,42 +357,40 @@ mod tests {
 
     #[test]
     fn parse_m1ddc_line_standard() {
-        let (num, model) = parse_m1ddc_line("[1] LG ULTRAGEAR (ABC123)");
+        let (num, model) = parse_m1ddc_line("[1] LG ULTRAGEAR (ABC123)").unwrap();
         assert_eq!(num, 1);
         assert_eq!(model, "LG ULTRAGEAR");
     }
 
     #[test]
     fn parse_m1ddc_line_multi_digit_index() {
-        let (num, model) = parse_m1ddc_line("[12] Dell U2723QE (UUID-123)");
+        let (num, model) = parse_m1ddc_line("[12] Dell U2723QE (UUID-123)").unwrap();
         assert_eq!(num, 12);
         assert_eq!(model, "Dell U2723QE");
     }
 
     #[test]
     fn parse_m1ddc_line_null_model_is_builtin() {
-        let (num, model) = parse_m1ddc_line("[1] (null) (37D8832A-2D66)");
+        let (num, model) = parse_m1ddc_line("[1] (null) (37D8832A-2D66)").unwrap();
         assert_eq!(num, 1);
         assert_eq!(model, "内置显示器");
     }
 
     #[test]
-    fn parse_m1ddc_line_no_bracket() {
-        let (num, model) = parse_m1ddc_line("Samsung LS27A (UUID)");
-        assert_eq!(num, 1);
-        assert_eq!(model, "Samsung LS27A");
+    fn parse_m1ddc_line_no_bracket_returns_none() {
+        assert!(parse_m1ddc_line("Samsung LS27A (UUID)").is_none());
     }
 
     #[test]
     fn parse_m1ddc_line_empty_before_paren() {
-        let (num, model) = parse_m1ddc_line("[2] (UUID-ONLY)");
+        let (num, model) = parse_m1ddc_line("[2] (UUID-ONLY)").unwrap();
         assert_eq!(num, 2);
         assert_eq!(model, "内置显示器");
     }
 
     #[test]
     fn parse_m1ddc_line_no_uuid() {
-        let (num, model) = parse_m1ddc_line("[3] Plain Model Name");
+        let (num, model) = parse_m1ddc_line("[3] Plain Model Name").unwrap();
         assert_eq!(num, 3);
         assert_eq!(model, "Plain Model Name");
     }

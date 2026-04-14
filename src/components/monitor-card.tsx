@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { DdcControls } from "./ddc-controls";
 import type { MonitorInfo, InputSource } from "../types/monitor";
 
 interface MonitorCardProps {
@@ -11,11 +12,16 @@ interface MonitorCardProps {
   customNames: Record<string, string>;
   onSwitch: (monitorIndex: number, inputValue: number) => void;
   onRename: (key: string, name: string) => void;
+  onDdcError?: (message: string) => void;
 }
 
-export const MonitorCard = memo(function MonitorCard({ monitor, switching, customNames, onSwitch, onRename }: MonitorCardProps) {
+export const MonitorCard = memo(function MonitorCard({ monitor, switching, customNames, onSwitch, onRename, onDdcError }: MonitorCardProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [showControls, setShowControls] = useState(false);
+
+  const hasDdcControls = monitor.brightness !== null || monitor.contrast !== null ||
+    monitor.volume !== null || monitor.power_mode !== null;
 
   const getDisplayName = (input: InputSource) => {
     const key = `${monitor.index}-${input.value}`;
@@ -73,6 +79,7 @@ export const MonitorCard = memo(function MonitorCard({ monitor, switching, custo
             const isActive = monitor.current_input === input.value;
             const switchKey = `${monitor.index}-${input.value}`;
             const isAnySwitching = switching !== null;
+            const isThisSwitching = switching === switchKey;
             const isEditing = editingKey === switchKey;
             const displayName = getDisplayName(input);
 
@@ -101,23 +108,41 @@ export const MonitorCard = memo(function MonitorCard({ monitor, switching, custo
             return (
               <div key={input.value} className="relative group">
                 <Button
-                  variant={isActive ? "default" : "outline"}
+                  variant={isThisSwitching || (!isAnySwitching && isActive) ? "default" : "outline"}
                   size="sm"
                   aria-pressed={isActive}
                   aria-label={isActive ? `${displayName}（当前输入源）` : `切换到 ${displayName}`}
                   className={`w-full text-xs h-10 transition-all duration-200 font-medium ${
-                    isActive
-                      ? "shadow-md shadow-primary/20"
-                      : "hover:border-primary/40 hover:bg-primary/5 hover:text-primary dark:hover:bg-primary/10"
+                    isThisSwitching
+                      ? "shadow-md shadow-primary/20 animate-pulse"
+                      : isActive
+                        ? "shadow-md shadow-primary/20"
+                        : isAnySwitching
+                          ? ""
+                          : "hover:border-primary/40 hover:bg-primary/5 hover:text-primary dark:hover:bg-primary/10"
                   }`}
-                  disabled={isAnySwitching && !isActive}
+                  style={
+                    isAnySwitching && !isThisSwitching
+                      ? { opacity: 0.35, pointerEvents: "none" as const, filter: "grayscale(100%)", transition: "none", background: "transparent", color: "inherit" }
+                      : undefined
+                  }
+                  disabled={isAnySwitching}
                   onClick={() => {
                     if (!isActive) {
                       onSwitch(monitor.index, input.value);
                     }
                   }}
                 >
-                  {isActive ? (
+                  {isThisSwitching ? (
+                    <span className="flex items-center gap-1.5">
+                      <svg aria-hidden="true" className="animate-spin h-3 w-3 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      {displayName}
+                      <span className="text-[9px] opacity-75 font-normal">切换中</span>
+                    </span>
+                  ) : isActive ? (
                     <span className="flex items-center gap-1.5">
                       <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       {displayName}
@@ -127,24 +152,51 @@ export const MonitorCard = memo(function MonitorCard({ monitor, switching, custo
                     displayName
                   )}
                 </Button>
-                <button
-                  type="button"
-                  className="absolute -top-1.5 -right-1.5 flex items-center justify-center w-5 h-5 rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-primary hover:border-primary/40 transition-all duration-150 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    startEditing(input);
-                  }}
-                  title="重命名"
-                  aria-label={`编辑 ${displayName} 的名称`}
-                >
-                  <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
-                  </svg>
-                </button>
+                {!isAnySwitching && (
+                  <button
+                    type="button"
+                    className="absolute -top-1.5 -right-1.5 flex items-center justify-center w-5 h-5 rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-primary hover:border-primary/40 transition-all duration-150 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startEditing(input);
+                    }}
+                    title="重命名"
+                    aria-label={`编辑 ${displayName} 的名称`}
+                  >
+                    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+                    </svg>
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
+
+        {hasDdcControls && (
+          <div className="mt-3">
+            <button
+              type="button"
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setShowControls((v) => !v)}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                className={`transition-transform duration-200 ${showControls ? "rotate-90" : ""}`}
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+              显示调节
+            </button>
+            {showControls && (
+              <div className="mt-2">
+                <DdcControls monitor={monitor} onError={onDdcError} />
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

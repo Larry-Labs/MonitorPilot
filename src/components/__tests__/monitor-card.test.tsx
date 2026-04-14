@@ -4,6 +4,10 @@ import { describe, it, expect, vi } from "vitest";
 import { MonitorCard } from "../monitor-card";
 import type { MonitorInfo } from "../../types/monitor";
 
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(() => Promise.resolve()),
+}));
+
 const mockMonitor: MonitorInfo = {
   index: 1,
   model: "LG ULTRAGEAR",
@@ -15,6 +19,10 @@ const mockMonitor: MonitorInfo = {
     { value: 0x11, name: "HDMI-1" },
     { value: 0x12, name: "HDMI-2" },
   ],
+  brightness: null,
+  contrast: null,
+  volume: null,
+  power_mode: null,
 };
 
 describe("MonitorCard", () => {
@@ -134,7 +142,7 @@ describe("MonitorCard", () => {
     expect(dp2Button).toBeDisabled();
   });
 
-  it("keeps active button enabled after optimistic update", () => {
+  it("disables all buttons during switching including active", () => {
     const optimisticMonitor = { ...mockMonitor, current_input: 0x11 };
     render(
       <MonitorCard
@@ -145,8 +153,23 @@ describe("MonitorCard", () => {
         onRename={vi.fn()}
       />,
     );
-    const activeButton = screen.getByRole("button", { name: /HDMI-1（当前输入源）/ });
-    expect(activeButton).not.toBeDisabled();
+    const activeButton = screen.getByRole("button", { name: /HDMI-1/ });
+    expect(activeButton).toBeDisabled();
+  });
+
+  it("shows loading state on switching target button", () => {
+    const optimisticMonitor = { ...mockMonitor, current_input: 0x11 };
+    render(
+      <MonitorCard
+        monitor={optimisticMonitor}
+        switching={"1-17"}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    const switchingButton = screen.getByRole("button", { name: /HDMI-1/ });
+    expect(switchingButton.textContent).toContain("切换中");
   });
 
   it("enters edit mode on pencil button click", async () => {
@@ -202,6 +225,33 @@ describe("MonitorCard", () => {
     await user.keyboard("{Escape}");
     expect(onRename).not.toHaveBeenCalled();
     expect(screen.queryByPlaceholderText("DP-1")).not.toBeInTheDocument();
+  });
+
+  it("shows DDC controls toggle when monitor has DDC data", () => {
+    const monitorWithDdc = { ...mockMonitor, brightness: 50, contrast: 70 };
+    render(
+      <MonitorCard
+        monitor={monitorWithDdc}
+        switching={null}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("显示调节")).toBeInTheDocument();
+  });
+
+  it("hides DDC controls toggle when monitor has no DDC data", () => {
+    render(
+      <MonitorCard
+        monitor={mockMonitor}
+        switching={null}
+        customNames={{}}
+        onSwitch={vi.fn()}
+        onRename={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("显示调节")).not.toBeInTheDocument();
   });
 
   it("has correct aria attributes on buttons", () => {

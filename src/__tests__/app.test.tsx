@@ -26,8 +26,10 @@ const mockConfig = {
   input_names: {},
 };
 
+const origRAF = globalThis.requestAnimationFrame;
 beforeEach(() => {
   vi.clearAllMocks();
+  globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => { cb(0); return 0; };
   mockInvoke.mockImplementation(async (cmd: string) => {
     switch (cmd) {
       case "cmd_get_monitors":
@@ -42,6 +44,10 @@ beforeEach(() => {
         throw new Error(`Unknown command: ${cmd}`);
     }
   });
+});
+
+afterEach(() => {
+  globalThis.requestAnimationFrame = origRAF;
 });
 
 describe("App", () => {
@@ -248,6 +254,10 @@ describe("App", () => {
 
     const hdmi2Button = screen.getByRole("button", { name: /切换到 HDMI-2/ });
     expect(hdmi2Button).toBeDisabled();
+
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 60));
+    });
 
     switched = true;
     resolveSwitch!({ status: "success", message: "已切换到 HDMI-1" });

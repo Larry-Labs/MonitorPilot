@@ -9,6 +9,10 @@ describe("Type definitions", () => {
       current_input: 0x0f,
       current_input_name: "DP-1",
       supported_inputs: [{ value: 0x0f, name: "DP-1" }],
+      brightness: 50,
+      contrast: 70,
+      volume: 30,
+      power_mode: 1,
     };
     expect(monitor.index).toBe(1);
     expect(monitor.supported_inputs).toHaveLength(1);
@@ -21,6 +25,10 @@ describe("Type definitions", () => {
       current_input: null,
       current_input_name: "未知",
       supported_inputs: [],
+      brightness: null,
+      contrast: null,
+      volume: null,
+      power_mode: null,
     };
     expect(monitor.current_input).toBeNull();
   });
@@ -43,6 +51,10 @@ describe("Type definitions", () => {
           current_input: 0x11,
           current_input_name: "HDMI-1",
           supported_inputs: [],
+          brightness: null,
+          contrast: null,
+          volume: null,
+          power_mode: null,
         },
       ],
       error: null,
@@ -54,6 +66,8 @@ describe("Type definitions", () => {
   it("AppConfig with custom names", () => {
     const config: AppConfig = {
       input_names: { "1-15": "MacBook", "1-17": "Ubuntu" },
+      monitor_order: [],
+      presets: [],
     };
     expect(Object.keys(config.input_names)).toHaveLength(2);
   });

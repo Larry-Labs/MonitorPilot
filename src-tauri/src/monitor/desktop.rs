@@ -1,7 +1,8 @@
 use ddc_hi::{Ddc, Display};
 
 use super::input_map::{input_name, supported_inputs_with_current};
-use super::types::{MonitorInfo, SwitchResult};
+use super::retry::{read_vcp_with_retry, write_vcp_with_retry, write_input_with_retry};
+use super::types::{MonitorInfo, SwitchResult, VCP_BRIGHTNESS, VCP_CONTRAST, VCP_VOLUME, VCP_POWER_MODE};
 use super::verify::{verify_switch, DdcOps};
 
 const VCP_INPUT_SOURCE: u8 = 0x60;
@@ -25,31 +26,44 @@ impl DdcOps for DdcHiAdapter {
             .set_vcp_feature(VCP_INPUT_SOURCE, value as u16)
             .map_err(|e| format!("DDC 写入失败: {}", e))
     }
+
+    fn read_vcp(&mut self, code: u8) -> Option<u16> {
+        self.display
+            .handle
+            .get_vcp_feature(code)
+            .ok()
+            .map(|v| v.value())
+    }
+
+    fn write_vcp(&mut self, code: u8, value: u16) -> Result<(), String> {
+        self.display
+            .handle
+            .set_vcp_feature(code, value)
+            .map_err(|e| format!("DDC 写入 0x{:02X} 失败: {}", code, e))
+    }
 }
 
 pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
+    let _guard = super::DDC_LOCK
+        .lock()
+        .map_err(|e| {
+            log::error!("DDC_LOCK 获取失败 (poison={})", e);
+            "DDC 内部错误，请重启应用".to_string()
+        })?;
+
     log::debug!("正在枚举 DDC/CI 显示器 (ddc-hi)...");
     let displays = Display::enumerate();
     let mut monitors = Vec::new();
 
-    for (i, mut display) in displays.into_iter().enumerate() {
+    for (i, display) in displays.into_iter().enumerate() {
         let model = display
             .info
             .model_name
             .clone()
             .unwrap_or_else(|| format!("Monitor {}", i + 1));
 
-        let current_input = match display.handle.get_vcp_feature(VCP_INPUT_SOURCE) {
-            Ok(v) => {
-                let val = v.value() as u8;
-                log::debug!("显示器 #{} 当前输入: 0x{:02X}", i, val);
-                Some(val)
-            }
-            Err(e) => {
-                log::debug!("读取显示器 #{} 输入失败: {}", i, e);
-                None
-            }
-        };
+        let mut ops = DdcHiAdapter { display };
+        let current_input = ops.read_input();
 
         let current_input_name = current_input
             .map(input_name)
@@ -68,6 +82,10 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
             current_input,
             current_input_name,
             supported_inputs: supported_inputs_with_current(current_input),
+            brightness: read_vcp_with_retry(&mut ops, VCP_BRIGHTNESS),
+            contrast: read_vcp_with_retry(&mut ops, VCP_CONTRAST),
+            volume: read_vcp_with_retry(&mut ops, VCP_VOLUME),
+            power_mode: read_vcp_with_retry(&mut ops, VCP_POWER_MODE).map(|v| v as u8),
         });
     }
 
@@ -78,7 +96,10 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
 pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResult, String> {
     let _guard = super::DDC_LOCK
         .lock()
-        .map_err(|_| "DDC 操作正忙，请稍后重试".to_string())?;
+        .map_err(|e| {
+            log::error!("DDC_LOCK 获取失败 (poison={})", e);
+            "DDC 内部错误，请重启应用".to_string()
+        })?;
 
     let displays = Display::enumerate();
     let display = displays.into_iter().nth(monitor_index).ok_or_else(|| {
@@ -101,7 +122,7 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResul
             .unwrap_or_else(|| "N/A".to_string())
     );
 
-    ops.write_input(input_value).map_err(|e| {
+    write_input_with_retry(&mut ops, input_value).map_err(|e| {
         log::error!(
             "切换失败: 显示器 #{} → {} | {}",
             monitor_index,
@@ -112,4 +133,21 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResul
     })?;
 
     verify_switch(input_value, previous_input, &mut ops)
+}
+
+pub fn set_vcp(monitor_index: usize, code: u8, value: u16) -> Result<(), String> {
+    let _guard = super::DDC_LOCK
+        .lock()
+        .map_err(|e| {
+            log::error!("DDC_LOCK 获取失败 (poison={})", e);
+            "DDC 内部错误，请重启应用".to_string()
+        })?;
+
+    let displays = Display::enumerate();
+    let display = displays.into_iter().nth(monitor_index).ok_or_else(|| {
+        format!("未找到显示器 #{}", monitor_index)
+    })?;
+
+    let mut ops = DdcHiAdapter { display };
+    write_vcp_with_retry(&mut ops, code, value)
 }
