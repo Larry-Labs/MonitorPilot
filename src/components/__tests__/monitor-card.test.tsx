@@ -242,7 +242,7 @@ describe("MonitorCard", () => {
     expect(screen.getByText("对比")).toBeInTheDocument();
   });
 
-  it("hides DDC controls toggle when monitor has no DDC data", () => {
+  it("hides DDC controls when monitor has no DDC data", () => {
     render(
       <MonitorCard
         monitor={mockMonitor}
@@ -252,7 +252,10 @@ describe("MonitorCard", () => {
         onRename={vi.fn()}
       />,
     );
-    expect(screen.queryByText("显示调节")).not.toBeInTheDocument();
+    expect(screen.queryByText("亮度")).not.toBeInTheDocument();
+    expect(screen.queryByText("对比")).not.toBeInTheDocument();
+    expect(screen.queryByText("音量")).not.toBeInTheDocument();
+    expect(screen.queryByText("电源")).not.toBeInTheDocument();
   });
 
   it("has correct aria attributes on buttons", () => {

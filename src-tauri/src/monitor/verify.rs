@@ -33,6 +33,14 @@ pub(crate) fn verify_switch(
                 );
                 confirmed = true;
             }
+            Some(actual) if confirmed => {
+                log::debug!(
+                    "验证第{}轮: DDC 抖动读到 {}，但已确认过目标 {}，忽略",
+                    round + 1,
+                    input_name(actual),
+                    input_name(target_value)
+                );
+            }
             Some(actual) => {
                 log::warn!(
                     "验证第{}轮: 期望 {} 实际 {} — 目标端口可能无信号",
