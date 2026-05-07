@@ -25,7 +25,7 @@ pub(crate) fn verify_switch(
         std::thread::sleep(Duration::from_millis(delay));
 
         match ops.read_input() {
-            Some(actual) if actual == target_value => {
+            Some(actual) if super::input_map::canonical_input(actual) == super::input_map::canonical_input(target_value) => {
                 log::debug!(
                     "验证第{}轮: 确认目标输入 {}",
                     round + 1,
@@ -39,6 +39,13 @@ pub(crate) fn verify_switch(
                     round + 1,
                     input_name(actual),
                     input_name(target_value)
+                );
+            }
+            Some(actual) if !super::input_map::is_known_input(actual) => {
+                log::debug!(
+                    "验证第{}轮: 读到无效值 0x{:02X}，视为过渡态，跳过",
+                    round + 1,
+                    actual
                 );
             }
             Some(actual) => {
@@ -82,13 +89,17 @@ pub(crate) fn verify_switch(
         log::warn!(
             "切换验证未能最终确认: 最后一轮 DDC 不可达",
         );
+        let prev_name = previous_input
+            .map(input_name)
+            .unwrap_or_else(|| "之前的输入".to_string());
         Ok(SwitchResult {
             status: "warning".to_string(),
             message: format!(
-                "已发送切换到 {} 的命令，但无法确认最终状态",
-                input_name(target_value)
+                "{} 可能无信号，已恢复到 {}",
+                input_name(target_value),
+                prev_name
             ),
-            actual_input: None,
+            actual_input: previous_input,
         })
     }
 }

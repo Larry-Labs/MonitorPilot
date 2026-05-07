@@ -270,7 +270,7 @@ describe("App", () => {
   it("shows version in footer", async () => {
     render(<App />);
     await waitFor(() => {
-      expect(screen.getByText(/MonitorPilot v/)).toBeInTheDocument();
+      expect(screen.getByText(/当前版本 v/)).toBeInTheDocument();
     });
   });
 });

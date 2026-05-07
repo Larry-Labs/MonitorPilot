@@ -12,6 +12,12 @@ interface DdcControlsProps {
 const DEBOUNCE_MS = 300;
 const POWER_ON = 1;
 const POWER_STANDBY = 4;
+const DDC_MIN = 0;
+const DDC_MAX = 100;
+
+function clampDdcValue(value: number) {
+  return Math.min(DDC_MAX, Math.max(DDC_MIN, value));
+}
 
 function DdcSlider({
   label,
@@ -28,11 +34,11 @@ function DdcSlider({
   command: string;
   onError?: (message: string) => void;
 }) {
-  const [local, setLocal] = useState(value);
+  const [local, setLocal] = useState(clampDdcValue(value));
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
-    if (!timerRef.current) setLocal(value);
+    if (!timerRef.current) setLocal(clampDdcValue(value));
   }, [value]);
 
   useEffect(() => {
@@ -41,7 +47,7 @@ function DdcSlider({
 
   const handleChange = useCallback(
     (val: number | readonly number[]) => {
-      const v = Array.isArray(val) ? val[0] : val;
+      const v = clampDdcValue(Array.isArray(val) ? val[0] : val);
       setLocal(v);
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
@@ -56,7 +62,7 @@ function DdcSlider({
   );
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
       <div className="flex items-center gap-1.5 w-16 shrink-0 text-xs text-muted-foreground">
         {icon}
         <span>{label}</span>
@@ -66,9 +72,9 @@ function DdcSlider({
         onValueChange={handleChange}
         max={100}
         step={1}
-        className="flex-1"
+        className="order-3 basis-full min-w-0 sm:order-2 sm:basis-0 sm:flex-1"
       />
-      <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
+      <span className="order-2 ml-auto w-8 text-right text-xs tabular-nums text-muted-foreground sm:order-3 sm:ml-0">
         {local}
       </span>
     </div>

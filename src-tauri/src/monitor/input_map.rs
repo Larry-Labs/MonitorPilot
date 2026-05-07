@@ -1,7 +1,15 @@
 use super::types::InputSource;
 
-pub fn input_name(value: u8) -> String {
+pub fn canonical_input(value: u8) -> u8 {
     match value {
+        // Some monitors report DP as vendor-specific input code 0x6E.
+        0x6E => 0x0F,
+        _ => value,
+    }
+}
+
+pub fn input_name(value: u8) -> String {
+    match canonical_input(value) {
         0x01 => "VGA-1".to_string(),
         0x02 => "VGA-2".to_string(),
         0x03 => "DVI-1".to_string(),
@@ -20,7 +28,7 @@ pub fn input_name(value: u8) -> String {
 pub fn is_known_input(value: u8) -> bool {
     matches!(
         value,
-        0x01 | 0x02 | 0x03 | 0x04 | 0x0F | 0x10 | 0x11 | 0x12 | 0x13 | 0x14 | 0x1B
+        0x01 | 0x02 | 0x03 | 0x04 | 0x0F | 0x10 | 0x11 | 0x12 | 0x13 | 0x14 | 0x1B | 0x6E
     )
 }
 
@@ -35,7 +43,16 @@ pub fn supported_inputs_with_current(current: Option<u8>) -> Vec<InputSource> {
         .collect();
 
     if let Some(cur) = current {
-        if !defaults.contains(&cur) {
+        let canonical = canonical_input(cur);
+        if defaults.contains(&canonical) {
+            // Replace the default entry with the actual monitor value
+            // so switching sends the value the monitor understands.
+            if cur != canonical {
+                if let Some(entry) = inputs.iter_mut().find(|i| i.value == canonical) {
+                    entry.value = cur;
+                }
+            }
+        } else {
             inputs.push(InputSource {
                 value: cur,
                 name: input_name(cur),
@@ -64,7 +81,7 @@ mod tests {
 
     #[test]
     fn input_name_unknown_value_formats_hex() {
-        assert_eq!(input_name(0x6E), "Input-0x6E");
+        assert_eq!(input_name(0x6E), "DP-1");
         assert_eq!(input_name(0xFF), "Input-0xFF");
         assert_eq!(input_name(0x00), "Input-0x00");
     }
@@ -89,11 +106,20 @@ mod tests {
 
     #[test]
     fn supported_inputs_with_unknown_current_appends() {
-        let inputs = supported_inputs_with_current(Some(0x6E));
+        let inputs = supported_inputs_with_current(Some(0x63));
         assert_eq!(inputs.len(), 5);
         assert_eq!(inputs[0].value, 0x0F);
-        assert_eq!(inputs[4].value, 0x6E);
-        assert_eq!(inputs[4].name, "Input-0x6E");
+        assert_eq!(inputs[4].value, 0x63);
+        assert_eq!(inputs[4].name, "Input-0x63");
+    }
+
+    #[test]
+    fn supported_inputs_with_vendor_dp_code_normalizes_to_default_dp() {
+        let inputs = supported_inputs_with_current(Some(0x6E));
+        assert_eq!(inputs.len(), 4);
+        // value preserves original 0x6E so switching sends the right code
+        assert_eq!(inputs[0].value, 0x6E);
+        assert_eq!(inputs[0].name, "DP-1");
     }
 
     #[test]
@@ -103,6 +129,7 @@ mod tests {
         assert!(is_known_input(0x11));
         assert!(is_known_input(0x12));
         assert!(is_known_input(0x1B));
+        assert!(is_known_input(0x6E));
         assert!(!is_known_input(0x63));
         assert!(!is_known_input(0x00));
         assert!(!is_known_input(0xFF));

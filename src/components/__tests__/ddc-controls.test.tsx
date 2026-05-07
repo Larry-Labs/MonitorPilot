@@ -86,6 +86,16 @@ describe("DdcControls", () => {
     expect(hiddenInput.value).toBe("50");
   });
 
+  it("clamps out-of-range DDC value to slider bounds", () => {
+    const monitor = { ...baseMonitor, brightness: 110 };
+    render(<DdcControls monitor={monitor} />);
+
+    expect(screen.getByText("100")).toBeInTheDocument();
+    const hiddenInput = document.querySelector("input[type='range']") as HTMLInputElement;
+    expect(hiddenInput).toBeTruthy();
+    expect(hiddenInput.value).toBe("100");
+  });
+
   it("calls power mode toggle on button click", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     vi.mocked(invoke).mockClear();

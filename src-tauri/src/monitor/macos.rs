@@ -11,6 +11,10 @@ use super::verify::{verify_switch, DdcOps};
 const M1DDC_TIMEOUT: Duration = Duration::from_secs(5);
 static M1DDC_PATH: OnceLock<String> = OnceLock::new();
 
+fn clamp_percent(value: u16) -> u16 {
+    value.min(100)
+}
+
 struct MacOsDdc {
     display_num: u32,
 }
@@ -294,9 +298,9 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
                 .map(input_name)
                 .unwrap_or_else(|| "未知".to_string()),
             supported_inputs: supported_inputs_with_current(current_input),
-            brightness: read_vcp_with_retry(&mut ops, VCP_BRIGHTNESS),
-            contrast: read_vcp_with_retry(&mut ops, VCP_CONTRAST),
-            volume: read_vcp_with_retry(&mut ops, VCP_VOLUME),
+            brightness: read_vcp_with_retry(&mut ops, VCP_BRIGHTNESS).map(clamp_percent),
+            contrast: read_vcp_with_retry(&mut ops, VCP_CONTRAST).map(clamp_percent),
+            volume: read_vcp_with_retry(&mut ops, VCP_VOLUME).map(clamp_percent),
             power_mode: read_vcp_with_retry(&mut ops, VCP_POWER_MODE).map(|v| v as u8),
         });
     }
@@ -348,7 +352,11 @@ pub fn set_vcp(monitor_index: usize, code: u8, value: u16) -> Result<(), String>
     let mut ops = MacOsDdc {
         display_num: monitor_index as u32,
     };
-    write_vcp_with_retry(&mut ops, code, value)
+    let safe_value = match code {
+        VCP_BRIGHTNESS | VCP_CONTRAST | VCP_VOLUME => clamp_percent(value),
+        _ => value,
+    };
+    write_vcp_with_retry(&mut ops, code, safe_value)
 }
 
 #[cfg(test)]

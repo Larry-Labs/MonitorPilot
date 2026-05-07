@@ -57,6 +57,10 @@ function App() {
       if (result.error) {
         setError(result.error);
       }
+      // During cooldown, ignore empty results to prevent flash-to-disconnected
+      if (result.monitors.length === 0 && Date.now() < revertCooldownUntil.current) {
+        return;
+      }
       setMonitors(result.monitors);
       monitorsSnapshotRef.current = result.monitors;
       monitorsJsonRef.current = JSON.stringify(result.monitors);
@@ -167,6 +171,7 @@ function App() {
 
     subscribe("tray-switch-done", () => {
       console.log("[MonitorPilot] 收到托盘切换完成事件");
+      revertCooldownUntil.current = Date.now() + 5000;
       silentRefresh();
     });
 
@@ -256,6 +261,7 @@ function App() {
         showToast({ type: "warning", message: result.message }, TOAST_LONG_MS);
       } else {
         monitorsJsonRef.current = "";
+        revertCooldownUntil.current = Date.now() + 5000;
         showToast({ type: "success", message: result.message }, TOAST_SHORT_MS);
       }
     } catch (e) {
@@ -267,7 +273,7 @@ function App() {
       showToast({ type: "error", message: String(e) }, TOAST_LONG_MS);
     } finally {
       const elapsed = Date.now() - switchStart;
-      const MIN_VISUAL_MS = 600;
+      const MIN_VISUAL_MS = 1500;
       if (elapsed < MIN_VISUAL_MS) {
         await new Promise(r => setTimeout(r, MIN_VISUAL_MS - elapsed));
       }
@@ -315,7 +321,12 @@ function App() {
               </svg>
             </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight">MonitorPilot</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-bold tracking-tight">MonitorPilot</h1>
+                <span className="inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                  v{__APP_VERSION__}
+                </span>
+              </div>
               <p className="text-xs text-muted-foreground">
                 DDC/CI 显示器输入源切换 · 告别物理按键
               </p>
@@ -456,8 +467,8 @@ function App() {
       )}
 
       <footer className="border-t border-border/40 px-5 py-2">
-        <p className="text-[10px] text-muted-foreground/70 text-center">
-          MonitorPilot v{__APP_VERSION__}
+        <p className="text-xs text-muted-foreground text-center font-medium tracking-wide">
+          当前版本 v{__APP_VERSION__}
         </p>
       </footer>
     </div>
