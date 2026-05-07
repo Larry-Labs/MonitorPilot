@@ -313,4 +313,62 @@ mod tests {
         assert!(result.message.contains("可能无信号"));
         assert_eq!(result.actual_input, Some(0x0F));
     }
+
+    // --- Rollback scenarios ---
+
+    #[test]
+    fn rollback_write_fails_returns_error() {
+        // Round 0: None → rollback → write fails → error
+        let mut ops = MockDdc::with_write_error(vec![None], "DDC write timeout");
+        let result = verify_switch(0x11, Some(0x0F), &mut ops);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("失联"));
+    }
+
+    #[test]
+    fn rollback_write_ok_but_readback_different() {
+        // Round 0: None → rollback → write OK → read back 0x12 (unexpected)
+        let mut ops = MockDdc::new(vec![None, Some(0x12)]);
+        let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
+        assert_eq!(result.status, "warning");
+        assert!(result.message.contains("HDMI-2"));
+        assert_eq!(result.actual_input, Some(0x12));
+    }
+
+    #[test]
+    fn rollback_write_ok_but_readback_none() {
+        // Round 0: None → rollback → write OK → read None
+        let mut ops = MockDdc::new(vec![None, None]);
+        let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
+        assert_eq!(result.status, "warning");
+        assert!(result.message.contains("无法确认"));
+        assert_eq!(result.actual_input, None);
+    }
+
+    // --- Edge cases ---
+
+    #[test]
+    fn verify_multiple_invalid_values_all_skipped() {
+        // Both rounds return different invalid values
+        let mut ops = MockDdc::new(vec![Some(0x63), Some(0xFE)]);
+        let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
+        assert_eq!(result.status, "warning");
+        assert!(result.message.contains("可能无信号"));
+    }
+
+    #[test]
+    fn verify_target_is_vendor_code_matches_standard() {
+        // Target is 0x6E (vendor DP), monitor reads back 0x0F (standard DP)
+        let mut ops = MockDdc::new(vec![Some(0x0F), Some(0x0F)]);
+        let result = verify_switch(0x6E, Some(0x11), &mut ops).unwrap();
+        assert_eq!(result.status, "success");
+    }
+
+    #[test]
+    fn verify_no_writes_on_successful_switch() {
+        let mut ops = MockDdc::new(vec![Some(0x11), Some(0x11)]);
+        let _ = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
+        // No write_input calls during verification (only reads)
+        assert!(ops.writes.borrow().is_empty());
+    }
 }

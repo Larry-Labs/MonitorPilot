@@ -1,6 +1,7 @@
 # 输入源切换流程分析与冷却保护
 
 > 创建于 2026-05-07，用于追踪切换逻辑一致性
+> 最后更新：2026-05-07
 
 ## 问题背景
 
@@ -90,4 +91,50 @@ T=~3s     invoke 返回 → 设置 revertCooldownUntil
 T=~3.6s   finally → switchingRef 清除
 T=3.6-11s 冷却保护期：空结果被忽略
 T=11s+    保护解除，正常轮询恢复（此时显示器已稳定）
+```
+
+## 测试覆盖
+
+### 后端 verify_switch（16 tests in `src-tauri/src/monitor/verify.rs`）
+
+| 场景分类 | 测试名 | 验证点 |
+|---------|--------|--------|
+| 成功 | `verify_success_both_rounds_confirm` | 两轮都读到目标值 → success |
+| 成功 | `verify_success_first_round_confirms_second_jitters` | 第一轮确认后第二轮 DDC 抖动 → 仍 success |
+| 成功 | `verify_success_vendor_code_equivalence` | 0x6E == 0x0F（归一化） |
+| 成功 | `verify_target_is_vendor_code_matches_standard` | 目标 0x6E，读回 0x0F → success |
+| 成功 | `verify_no_writes_on_successful_switch` | 成功时不触发任何写操作 |
+| 失败 | `verify_warning_different_known_input` | 读回不同已知输入 → warning "无信号" |
+| 无效值 | `verify_invalid_value_treated_as_transient` | 两轮都 0x00 → 不判为已知输入回弹 |
+| 无效值 | `verify_invalid_then_target_confirms` | 第一轮 0x00 跳过，第二轮确认 → success |
+| 无效值 | `verify_multiple_invalid_values_all_skipped` | 不同无效值（0x63, 0xFE）都跳过 |
+| None | `verify_none_round0_triggers_rollback` | Round 0 不可达 → 触发回滚 |
+| None | `verify_none_round0_no_previous_errors` | 无前输入时回滚 → error |
+| None | `verify_none_later_rounds_not_confirmed` | 已确认后 None → 仍 success |
+| None | `verify_all_none_after_round0_not_confirmed` | 无效值 + None → "可能无信号" |
+| 回滚 | `rollback_write_fails_returns_error` | 回滚写入失败 → error |
+| 回滚 | `rollback_write_ok_but_readback_different` | 回滚后读到第三方值 |
+| 回滚 | `rollback_write_ok_but_readback_none` | 回滚后仍不可达 → "无法确认" |
+
+### 前端切换冷却保护（4 tests in `src/__tests__/app.test.tsx`）
+
+| 测试名 | 验证点 |
+|--------|--------|
+| `preserves monitors when post-switch poll returns empty during cooldown` | success 路径：5s 冷却内轮询返回空不清 |
+| `preserves monitors when display-changed triggers refresh with empty result during cooldown` | warning 路径：8s 冷却 + display-changed 事件 |
+| `preserves monitors when switch invoke rejects (error path)` | error 路径：8s 冷却保护 |
+| `tray-switch-done event sets cooldown and preserves monitors` | 托盘路径：5s 冷却 + display-changed |
+
+### 测试运行方式
+
+```bash
+# 后端
+cd src-tauri && cargo test
+
+# 前端
+npx vitest run
+
+# 仅切换相关
+cd src-tauri && cargo test verify
+npx vitest run -t "cooldown"
 ```

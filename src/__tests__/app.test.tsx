@@ -426,6 +426,77 @@ describe("App — switch cooldown protection", () => {
     // Monitor should still be displayed (cooldown protects)
     expect(screen.getByText("Test Monitor")).toBeInTheDocument();
   }, 15000);
+
+  it("preserves monitors when switch invoke rejects (error path)", async () => {
+    let callCount = 0;
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "cmd_get_monitors") {
+        callCount++;
+        if (callCount === 1) return mockMonitorListResult;
+        return { monitors: [], error: null };
+      }
+      if (cmd === "cmd_get_config") return mockConfig;
+      if (cmd === "cmd_switch_input") throw new Error("DDC 通信超时");
+      return undefined;
+    });
+
+    render(<App />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+
+    // Click switch — will throw
+    const hdmiBtn = screen.getByRole("button", { name: /切换到 HDMI-1/ });
+    await act(async () => { hdmiBtn.click(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+
+    // Verify error toast appeared (check before it auto-dismisses)
+    expect(screen.getByText(/通信超时/)).toBeInTheDocument();
+
+    // Error sets 8s cooldown; poll during cooldown returns empty
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+
+    // Monitor preserved
+    expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+  }, 15000);
+
+  it("tray-switch-done event sets cooldown and preserves monitors", async () => {
+    const { listen: mockListen } = await import("@tauri-apps/api/event");
+    const eventHandlers: Record<string, () => void> = {};
+    vi.mocked(mockListen).mockImplementation(async (event: string, handler: any) => {
+      eventHandlers[event] = handler;
+      return () => {};
+    });
+
+    let callCount = 0;
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "cmd_get_monitors") {
+        callCount++;
+        if (callCount === 1) return mockMonitorListResult;
+        return { monitors: [], error: null };
+      }
+      if (cmd === "cmd_get_config") return mockConfig;
+      return undefined;
+    });
+
+    render(<App />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+
+    // Simulate tray switch done event
+    if (eventHandlers["tray-switch-done"]) {
+      await act(async () => { eventHandlers["tray-switch-done"](); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    }
+
+    // display-changed fires during cooldown with empty monitors
+    if (eventHandlers["display-changed"]) {
+      await act(async () => { eventHandlers["display-changed"](); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    }
+
+    // Monitor should be preserved
+    expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+  }, 15000);
 });
 
 describe("App — rename", () => {
