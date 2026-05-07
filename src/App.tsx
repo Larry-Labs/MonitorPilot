@@ -236,29 +236,33 @@ function App() {
     showToast({ type: "switching", message: "正在切换输入源..." });
     await new Promise(r => setTimeout(r, 50));
     const switchStart = Date.now();
+    let pendingRestore: (() => void) | null = null;
     try {
       const result = await invoke<SwitchResult>("cmd_switch_input", { monitorIndex, inputValue });
       if (!mountedRef.current) return;
 
       if (result.status === "warning") {
-        if (result.actual_input != null) {
-          setMonitors(prev => {
-            const restored = prev.map(m =>
-              m.index === monitorIndex
-                ? { ...m, current_input: result.actual_input! }
-                : m
-            );
-            monitorsSnapshotRef.current = restored;
-            monitorsJsonRef.current = JSON.stringify(restored);
-            return restored;
-          });
-        } else {
-          setMonitors(previousMonitors);
-          monitorsSnapshotRef.current = previousMonitors;
-          monitorsJsonRef.current = JSON.stringify(previousMonitors);
-        }
-        revertCooldownUntil.current = Date.now() + 8000;
-        showToast({ type: "warning", message: result.message }, TOAST_LONG_MS);
+        // Defer state restoration until MIN_VISUAL_MS to avoid jarring flash-back
+        pendingRestore = () => {
+          if (result.actual_input != null) {
+            setMonitors(prev => {
+              const restored = prev.map(m =>
+                m.index === monitorIndex
+                  ? { ...m, current_input: result.actual_input! }
+                  : m
+              );
+              monitorsSnapshotRef.current = restored;
+              monitorsJsonRef.current = JSON.stringify(restored);
+              return restored;
+            });
+          } else {
+            setMonitors(previousMonitors);
+            monitorsSnapshotRef.current = previousMonitors;
+            monitorsJsonRef.current = JSON.stringify(previousMonitors);
+          }
+          revertCooldownUntil.current = Date.now() + 8000;
+          showToast({ type: "warning", message: result.message }, TOAST_LONG_MS);
+        };
       } else {
         monitorsJsonRef.current = "";
         revertCooldownUntil.current = Date.now() + 5000;
@@ -266,17 +270,20 @@ function App() {
       }
     } catch (e) {
       if (!mountedRef.current) return;
-      setMonitors(previousMonitors);
-      monitorsSnapshotRef.current = previousMonitors;
-      monitorsJsonRef.current = JSON.stringify(previousMonitors);
-      revertCooldownUntil.current = Date.now() + 8000;
-      showToast({ type: "error", message: String(e) }, TOAST_LONG_MS);
+      pendingRestore = () => {
+        setMonitors(previousMonitors);
+        monitorsSnapshotRef.current = previousMonitors;
+        monitorsJsonRef.current = JSON.stringify(previousMonitors);
+        revertCooldownUntil.current = Date.now() + 8000;
+        showToast({ type: "error", message: String(e) }, TOAST_LONG_MS);
+      };
     } finally {
       const elapsed = Date.now() - switchStart;
       const MIN_VISUAL_MS = 1500;
       if (elapsed < MIN_VISUAL_MS) {
         await new Promise(r => setTimeout(r, MIN_VISUAL_MS - elapsed));
       }
+      if (pendingRestore && mountedRef.current) pendingRestore();
       switchLock.current = false;
       switchingRef.current = null;
       if (mountedRef.current) setSwitching(null);

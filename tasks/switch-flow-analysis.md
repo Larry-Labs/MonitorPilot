@@ -54,9 +54,31 @@
 
 | 入口 | 调用路径 | 冷却保护 |
 |------|---------|---------|
-| UI 按钮点击 | `MonitorCard` → `handleSwitch()` | ✓ success 5s / warning 8s / error 8s |
+| UI 按钮点击 | `MonitorCard.onClick` → `onSwitch(monitor.index, input.value)` → `App.handleSwitch` | ✓ success 5s / warning 8s / error 8s |
 | 托盘菜单 | 后端 `tray.rs` → `switch_input()` → emit `tray-switch-done` → 前端设 5s 冷却 + `silentRefresh()` | ✓ |
 | 预设应用 | `cmd_apply_preset` 仅后端定义，前端/托盘均无调用入口 | N/A（死代码） |
+
+**统一性保障**：
+- 所有输入源按钮（DP-1/DP-2/HDMI-1/HDMI-2/USB-C 等）在 `monitor-card.tsx` L131 统一调用 `onSwitch(monitor.index, input.value)`
+- `App.tsx` L432 传入 `onSwitch={handleSwitch}`，无中间代理或条件分支
+- `handleSwitch` 内部对 `inputValue` 完全透明，不做任何值特判
+- 切换期间 `disabled={isAnySwitching}` 防止并发点击
+
+## 防闪回机制（MIN_VISUAL_MS）
+
+当切换失败/回弹时，状态恢复被延迟到最小视觉时间之后：
+
+```
+handleSwitch:
+  T=0        乐观更新 + "正在切换" toast
+  T=50ms     invoke 发出
+  T=~700ms   后端返回 warning（pendingRestore 存储恢复逻辑）
+  T=1500ms   finally: 执行 pendingRestore → 恢复原输入 + warning toast
+             → 用户看到平滑过渡而非闪回
+```
+
+- `pendingRestore` 模式：warning/error 的恢复逻辑被存为闭包，在 MIN_VISUAL_MS 延迟后执行
+- success 路径不延迟（乐观更新本身就是正确的最终状态）
 
 ## 待验证项
 

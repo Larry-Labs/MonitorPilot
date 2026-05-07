@@ -181,7 +181,7 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/切换失败/)).toBeInTheDocument();
-    });
+    }, { timeout: 3000 });
   });
 
   it("shows warning toast for partial success", async () => {
@@ -204,7 +204,7 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/无信号|目标端口/)).toBeInTheDocument();
-    });
+    }, { timeout: 3000 });
   });
 
   it("disables other input buttons during switch", async () => {
