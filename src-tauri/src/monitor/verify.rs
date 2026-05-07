@@ -165,3 +165,152 @@ fn attempt_rollback(
         input_name(target_value)
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    struct MockDdc {
+        reads: RefCell<Vec<Option<u8>>>,
+        writes: RefCell<Vec<u8>>,
+        write_result: Result<(), String>,
+    }
+
+    impl MockDdc {
+        fn new(reads: Vec<Option<u8>>) -> Self {
+            Self {
+                reads: RefCell::new(reads),
+                writes: RefCell::new(Vec::new()),
+                write_result: Ok(()),
+            }
+        }
+
+        fn with_write_error(reads: Vec<Option<u8>>, err: &str) -> Self {
+            Self {
+                reads: RefCell::new(reads),
+                writes: RefCell::new(Vec::new()),
+                write_result: Err(err.to_string()),
+            }
+        }
+    }
+
+    impl DdcOps for MockDdc {
+        fn read_input(&mut self) -> Option<u8> {
+            let mut reads = self.reads.borrow_mut();
+            if reads.is_empty() {
+                None
+            } else {
+                reads.remove(0)
+            }
+        }
+
+        fn write_input(&mut self, value: u8) -> Result<(), String> {
+            self.writes.borrow_mut().push(value);
+            self.write_result.clone()
+        }
+
+        fn read_vcp(&mut self, _code: u8) -> Option<u16> {
+            None
+        }
+
+        fn write_vcp(&mut self, _code: u8, _value: u16) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn verify_success_both_rounds_confirm() {
+        let mut ops = MockDdc::new(vec![Some(0x11), Some(0x11)]);
+        let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
+        assert_eq!(result.status, "success");
+        assert_eq!(result.actual_input, Some(0x11));
+    }
+
+    #[test]
+    fn verify_success_first_round_confirms_second_jitters() {
+        // Round 0: target confirmed, Round 1: DDC jitter reads different value
+        let mut ops = MockDdc::new(vec![Some(0x11), Some(0x0F)]);
+        let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
+        assert_eq!(result.status, "success");
+    }
+
+    #[test]
+    fn verify_success_vendor_code_equivalence() {
+        // Monitor reports 0x6E (vendor DP) when target is 0x0F (standard DP)
+        let mut ops = MockDdc::new(vec![Some(0x6E), Some(0x6E)]);
+        let result = verify_switch(0x0F, Some(0x11), &mut ops).unwrap();
+        assert_eq!(result.status, "success");
+        assert!(result.message.contains("DP-1"));
+    }
+
+    #[test]
+    fn verify_warning_different_known_input() {
+        // Target is HDMI-1, but monitor reads back DP-1 (no signal on HDMI)
+        let mut ops = MockDdc::new(vec![Some(0x0F)]);
+        let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
+        assert_eq!(result.status, "warning");
+        assert!(result.message.contains("HDMI-1"));
+        assert!(result.message.contains("DP-1"));
+        assert_eq!(result.actual_input, Some(0x0F));
+    }
+
+    #[test]
+    fn verify_invalid_value_treated_as_transient() {
+        // Both rounds return 0x00 (invalid) → not confirmed, uses previous input
+        let mut ops = MockDdc::new(vec![Some(0x00), Some(0x00)]);
+        let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
+        assert_eq!(result.status, "warning");
+        assert!(result.message.contains("可能无信号"));
+        assert!(result.message.contains("DP-1"));
+        assert_eq!(result.actual_input, Some(0x0F));
+    }
+
+    #[test]
+    fn verify_invalid_then_target_confirms() {
+        // Round 0: invalid 0x00 (skip), Round 1: target confirmed
+        let mut ops = MockDdc::new(vec![Some(0x00), Some(0x11)]);
+        let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
+        assert_eq!(result.status, "success");
+        assert_eq!(result.actual_input, Some(0x11));
+    }
+
+    #[test]
+    fn verify_none_round0_triggers_rollback() {
+        // Round 0: None → attempt rollback → write previous → read confirms
+        let mut ops = MockDdc::new(vec![None, Some(0x0F)]);
+        let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
+        assert_eq!(result.status, "warning");
+        assert!(result.message.contains("失联"));
+        assert!(result.message.contains("恢复到"));
+        assert_eq!(result.actual_input, Some(0x0F));
+        assert_eq!(*ops.writes.borrow(), vec![0x0F]);
+    }
+
+    #[test]
+    fn verify_none_round0_no_previous_errors() {
+        let mut ops = MockDdc::new(vec![None]);
+        let result = verify_switch(0x11, None, &mut ops);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("失联"));
+    }
+
+    #[test]
+    fn verify_none_later_rounds_not_confirmed() {
+        // Round 0: target confirmed, Round 1: None (DDC unreachable)
+        let mut ops = MockDdc::new(vec![Some(0x11), None]);
+        let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
+        // Still success because round 0 confirmed
+        assert_eq!(result.status, "success");
+    }
+
+    #[test]
+    fn verify_all_none_after_round0_not_confirmed() {
+        // Round 0: invalid, Round 1: None → not confirmed
+        let mut ops = MockDdc::new(vec![Some(0x00), None]);
+        let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
+        assert_eq!(result.status, "warning");
+        assert!(result.message.contains("可能无信号"));
+        assert_eq!(result.actual_input, Some(0x0F));
+    }
+}

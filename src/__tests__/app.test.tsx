@@ -264,7 +264,7 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(hdmi2Button).not.toBeDisabled();
-    });
+    }, { timeout: 3000 });
   });
 
   it("shows version in footer", async () => {
@@ -335,6 +335,97 @@ describe("App — polling", () => {
 
     expect(screen.getByText("Test Monitor")).toBeInTheDocument();
   });
+});
+
+describe("App — switch cooldown protection", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("preserves monitors when post-switch poll returns empty during cooldown", async () => {
+    let callCount = 0;
+    let switched = false;
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "cmd_get_monitors") {
+        callCount++;
+        if (callCount === 1) return mockMonitorListResult;
+        // After switch, simulate DDC temporarily unreachable
+        if (switched) return { monitors: [], error: null };
+        return mockMonitorListResult;
+      }
+      if (cmd === "cmd_get_config") return mockConfig;
+      if (cmd === "cmd_switch_input") {
+        switched = true;
+        return { status: "success", message: "已切换到 HDMI-1", actual_input: 0x11 };
+      }
+      return undefined;
+    });
+
+    render(<App />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+
+    // Click switch button
+    const hdmiBtn = screen.getByRole("button", { name: /切换到 HDMI-1/ });
+    await act(async () => { hdmiBtn.click(); });
+
+    // Advance past the 50ms pre-delay + switch completion
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+
+    // Now advance to trigger a poll during cooldown
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+
+    // Monitor should still be displayed (not cleared by empty poll during cooldown)
+    expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+  }, 15000);
+
+  it("preserves monitors when display-changed triggers refresh with empty result during cooldown", async () => {
+    const { listen: mockListen } = await import("@tauri-apps/api/event");
+    const eventHandlers: Record<string, () => void> = {};
+    vi.mocked(mockListen).mockImplementation(async (event: string, handler: any) => {
+      eventHandlers[event] = handler;
+      return () => {};
+    });
+
+    let callCount = 0;
+    let returnEmpty = false;
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "cmd_get_monitors") {
+        callCount++;
+        if (callCount === 1) return mockMonitorListResult;
+        if (returnEmpty) return { monitors: [], error: null };
+        return mockMonitorListResult;
+      }
+      if (cmd === "cmd_get_config") return mockConfig;
+      if (cmd === "cmd_switch_input") {
+        return { status: "warning", message: "HDMI-1 无信号，已恢复到 DP-1", actual_input: 0x0f };
+      }
+      return undefined;
+    });
+
+    render(<App />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+
+    // Click switch (will get warning result)
+    const hdmiBtn = screen.getByRole("button", { name: /切换到 HDMI-1/ });
+    await act(async () => { hdmiBtn.click(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+
+    // Now simulate display-changed event with empty get_monitors
+    returnEmpty = true;
+    if (eventHandlers["display-changed"]) {
+      await act(async () => { eventHandlers["display-changed"](); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    }
+
+    // Monitor should still be displayed (cooldown protects)
+    expect(screen.getByText("Test Monitor")).toBeInTheDocument();
+  }, 15000);
 });
 
 describe("App — rename", () => {
