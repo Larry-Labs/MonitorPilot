@@ -86,21 +86,12 @@ pub(crate) fn verify_switch(
             actual_input: Some(target_value),
         })
     } else {
+        // All rounds returned invalid/unknown values — actual state unknown.
+        // Attempt rollback instead of falsely claiming "已恢复".
         log::warn!(
-            "切换验证未能最终确认: 最后一轮 DDC 不可达",
+            "切换验证未能最终确认: 所有轮次均返回无效值，尝试回滚",
         );
-        let prev_name = previous_input
-            .map(input_name)
-            .unwrap_or_else(|| "之前的输入".to_string());
-        Ok(SwitchResult {
-            status: "warning".to_string(),
-            message: format!(
-                "{} 可能无信号，已恢复到 {}",
-                input_name(target_value),
-                prev_name
-            ),
-            actual_input: previous_input,
-        })
+        attempt_rollback(target_value, previous_input, ops)
     }
 }
 
@@ -257,13 +248,15 @@ mod tests {
 
     #[test]
     fn verify_invalid_value_treated_as_transient() {
-        // Both rounds return 0x00 (invalid) → not confirmed, uses previous input
-        let mut ops = MockDdc::new(vec![Some(0x00), Some(0x00)]);
+        // Both rounds return 0x00 (invalid) → not confirmed → triggers rollback
+        // Rollback write 0x0F → read confirms 0x0F
+        let mut ops = MockDdc::new(vec![Some(0x00), Some(0x00), Some(0x0F)]);
         let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
         assert_eq!(result.status, "warning");
-        assert!(result.message.contains("可能无信号"));
-        assert!(result.message.contains("DP-1"));
+        assert!(result.message.contains("恢复到"));
         assert_eq!(result.actual_input, Some(0x0F));
+        // Rollback actually wrote the previous input
+        assert_eq!(*ops.writes.borrow(), vec![0x0F]);
     }
 
     #[test]
@@ -306,12 +299,14 @@ mod tests {
 
     #[test]
     fn verify_all_none_after_round0_not_confirmed() {
-        // Round 0: invalid, Round 1: None → not confirmed
+        // Round 0: invalid, Round 1: None → not confirmed → triggers rollback
+        // Rollback write 0x0F → read returns None (can't confirm)
         let mut ops = MockDdc::new(vec![Some(0x00), None]);
         let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
         assert_eq!(result.status, "warning");
-        assert!(result.message.contains("可能无信号"));
-        assert_eq!(result.actual_input, Some(0x0F));
+        assert!(result.message.contains("无法确认"));
+        assert_eq!(result.actual_input, None);
+        assert_eq!(*ops.writes.borrow(), vec![0x0F]);
     }
 
     // --- Rollback scenarios ---
@@ -349,11 +344,13 @@ mod tests {
 
     #[test]
     fn verify_multiple_invalid_values_all_skipped() {
-        // Both rounds return different invalid values
-        let mut ops = MockDdc::new(vec![Some(0x63), Some(0xFE)]);
+        // Both rounds return different invalid values → triggers rollback
+        // Rollback write 0x0F → read confirms 0x0F
+        let mut ops = MockDdc::new(vec![Some(0x63), Some(0xFE), Some(0x0F)]);
         let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
         assert_eq!(result.status, "warning");
-        assert!(result.message.contains("可能无信号"));
+        assert!(result.message.contains("恢复到"));
+        assert_eq!(*ops.writes.borrow(), vec![0x0F]);
     }
 
     #[test]
