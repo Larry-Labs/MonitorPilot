@@ -177,7 +177,10 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
             }
         }
         "refresh" => {
-            refresh_tray(app);
+            let app = app.clone();
+            std::thread::spawn(move || {
+                refresh_tray(&app);
+            });
         }
         "homepage" => {
             if let Err(e) = open::that("https://github.com/Larry-Labs/MonitorPilot") {
@@ -195,19 +198,22 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
                 if let (Ok(monitor_idx), Ok(input_val)) =
                     (parts[1].parse::<usize>(), parts[2].parse::<u8>())
                 {
-                    match switch_input(monitor_idx, input_val) {
-                        Ok(result) if result.status == "warning" => {
-                            log::warn!("托盘切换警告: {}", result.message);
+                    let app = app.clone();
+                    std::thread::spawn(move || {
+                        match switch_input(monitor_idx, input_val) {
+                            Ok(result) if result.status == "warning" => {
+                                log::warn!("托盘切换警告: {}", result.message);
+                            }
+                            Ok(result) => {
+                                log::info!("托盘切换成功: {}", result.message);
+                            }
+                            Err(e) => log::error!("托盘切换失败: {}", e),
                         }
-                        Ok(result) => {
-                            log::info!("托盘切换成功: {}", result.message);
+                        refresh_tray(&app);
+                        if let Err(e) = app.emit("tray-switch-done", ()) {
+                            log::debug!("通知前端托盘切换完成失败: {}", e);
                         }
-                        Err(e) => log::error!("托盘切换失败: {}", e),
-                    }
-                    refresh_tray(app);
-                    if let Err(e) = app.emit("tray-switch-done", ()) {
-                        log::debug!("通知前端托盘切换完成失败: {}", e);
-                    }
+                    });
                 } else {
                     log::warn!("托盘菜单 ID 解析失败: {}", id);
                 }
