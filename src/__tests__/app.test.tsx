@@ -159,8 +159,8 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(screen.getByText("已切换到 HDMI-1")).toBeInTheDocument();
-    });
-  });
+    }, { timeout: 8000 });
+  }, 10000);
 
   it("shows error toast when switch fails", async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
@@ -181,8 +181,8 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/切换失败/)).toBeInTheDocument();
-    }, { timeout: 3000 });
-  });
+    }, { timeout: 8000 });
+  }, 10000);
 
   it("shows warning toast for partial success", async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
@@ -204,8 +204,8 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/无信号|目标端口/)).toBeInTheDocument();
-    }, { timeout: 3000 });
-  });
+    }, { timeout: 8000 });
+  }, 10000);
 
   it("disables other input buttons during switch", async () => {
     const threeInputMonitors = {
@@ -264,8 +264,8 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(hdmi2Button).not.toBeDisabled();
-    }, { timeout: 3000 });
-  });
+    }, { timeout: 8000 });
+  }, 10000);
 
   it("shows version in footer", async () => {
     render(<App />);
@@ -288,8 +288,10 @@ describe("App — polling", () => {
     let callCount = 0;
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "cmd_get_monitors") {
+        return mockMonitorListResult;
+      }
+      if (cmd === "cmd_poll_monitors") {
         callCount++;
-        if (callCount === 1) return mockMonitorListResult;
         throw new Error("poll error");
       }
       if (cmd === "cmd_get_config") return mockConfig;
@@ -302,7 +304,7 @@ describe("App — polling", () => {
     expect(screen.getByText("Test Monitor")).toBeInTheDocument();
 
     for (let i = 0; i < 3; i++) {
-      act(() => { vi.advanceTimersByTime(3000); });
+      act(() => { vi.advanceTimersByTime(5000); });
       await act(async () => {});
     }
 
@@ -310,11 +312,11 @@ describe("App — polling", () => {
   }, 15000);
 
   it("does not clear monitors when poll returns empty but monitors exist", async () => {
-    let callCount = 0;
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === "cmd_get_monitors") {
-        callCount++;
-        if (callCount === 1) return mockMonitorListResult;
+        return mockMonitorListResult;
+      }
+      if (cmd === "cmd_poll_monitors") {
         return { monitors: [], error: null };
       }
       if (cmd === "cmd_get_config") return mockConfig;
@@ -330,7 +332,7 @@ describe("App — polling", () => {
     expect(screen.getByText("Test Monitor")).toBeInTheDocument();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(5000);
     });
 
     expect(screen.getByText("Test Monitor")).toBeInTheDocument();
@@ -447,7 +449,7 @@ describe("App — switch cooldown protection", () => {
     // Click switch — will throw
     const hdmiBtn = screen.getByRole("button", { name: /切换到 HDMI-1/ });
     await act(async () => { hdmiBtn.click(); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(7000); });
 
     // Verify error toast appeared (check before it auto-dismisses)
     expect(screen.getByText(/通信超时/)).toBeInTheDocument();

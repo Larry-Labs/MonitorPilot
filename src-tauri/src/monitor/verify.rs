@@ -2,7 +2,7 @@ use std::time::Duration;
 use super::input_map::input_name;
 use super::types::SwitchResult;
 
-const VERIFY_DELAYS: &[u64] = &[600, 1400];
+const VERIFY_DELAYS: &[u64] = &[600, 1400, 2000];
 const POST_ROLLBACK_VERIFY_MS: u64 = 600;
 
 pub(crate) trait DdcOps {
@@ -20,6 +20,7 @@ pub(crate) fn verify_switch(
     log::debug!("切换命令已发送，开始多轮验证 ({}轮)", VERIFY_DELAYS.len());
 
     let mut confirmed = false;
+    let mut consecutive_unreachable = 0;
 
     for (round, &delay) in VERIFY_DELAYS.iter().enumerate() {
         std::thread::sleep(Duration::from_millis(delay));
@@ -32,6 +33,7 @@ pub(crate) fn verify_switch(
                     input_name(target_value)
                 );
                 confirmed = true;
+                consecutive_unreachable = 0;
             }
             Some(actual) if confirmed => {
                 log::debug!(
@@ -40,8 +42,11 @@ pub(crate) fn verify_switch(
                     input_name(actual),
                     input_name(target_value)
                 );
+                consecutive_unreachable = 0;
             }
             Some(actual) if !super::input_map::is_known_input(actual) => {
+                // 收到无效值说明 DDC 有响应，重置不可达计数
+                consecutive_unreachable = 0;
                 log::debug!(
                     "验证第{}轮: 读到无效值 0x{:02X}，视为过渡态，跳过",
                     round + 1,
@@ -65,11 +70,17 @@ pub(crate) fn verify_switch(
                     actual_input: Some(actual),
                 });
             }
-            None if round == 0 => {
-                return attempt_rollback(target_value, previous_input, ops);
-            }
             None => {
-                log::debug!("验证第{}轮: DDC 暂时不可达，跳过", round + 1);
+                consecutive_unreachable += 1;
+                log::debug!(
+                    "验证第{}轮: DDC 不可达 (连续{}次)",
+                    round + 1,
+                    consecutive_unreachable
+                );
+                if consecutive_unreachable >= 2 {
+                    log::warn!("连续{}轮 DDC 不可达，提前终止验证", consecutive_unreachable);
+                    break;
+                }
             }
         }
     }
@@ -89,7 +100,7 @@ pub(crate) fn verify_switch(
         // All rounds returned invalid/unknown values — actual state unknown.
         // Attempt rollback instead of falsely claiming "已恢复".
         log::warn!(
-            "切换验证未能最终确认: 所有轮次均返回无效值，尝试回滚",
+            "切换验证未能最终确认: DDC 不可达或返回无效值，尝试回滚",
         );
         attempt_rollback(target_value, previous_input, ops)
     }
@@ -127,7 +138,7 @@ fn attempt_rollback(
                     input_name(prev),
                     current.map(input_name)
                 );
-                if let Some(actual) = current {
+                if let Some(actual) = current.filter(|&v| super::input_map::is_known_input(v)) {
                     return Ok(SwitchResult {
                         status: "warning".to_string(),
                         message: format!(
@@ -147,7 +158,13 @@ fn attempt_rollback(
                     actual_input: None,
                 });
             }
-            Err(e) => log::error!("回滚命令失败: {}", e),
+            Err(e) => {
+                log::error!("回滚命令失败: {}", e);
+                return Err(format!(
+                    "切换到 {} 后尝试恢复失败，显示器可能停留在目标输入上",
+                    input_name(target_value)
+                ));
+            }
         }
     }
 
@@ -248,9 +265,9 @@ mod tests {
 
     #[test]
     fn verify_invalid_value_treated_as_transient() {
-        // Both rounds return 0x00 (invalid) → not confirmed → triggers rollback
+        // 3 rounds all return 0x00 (invalid) → not confirmed → triggers rollback
         // Rollback write 0x0F → read confirms 0x0F
-        let mut ops = MockDdc::new(vec![Some(0x00), Some(0x00), Some(0x0F)]);
+        let mut ops = MockDdc::new(vec![Some(0x00), Some(0x00), Some(0x00), Some(0x0F)]);
         let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
         assert_eq!(result.status, "warning");
         assert!(result.message.contains("恢复到"));
@@ -269,23 +286,25 @@ mod tests {
     }
 
     #[test]
-    fn verify_none_round0_triggers_rollback() {
-        // Round 0: None → attempt rollback → write previous → read confirms
+    fn verify_none_round0_continues_to_next_round() {
+        // Round 0: None → skip (no immediate rollback)
+        // Round 1: reads 0x0F (known, != target) → warning "no signal"
         let mut ops = MockDdc::new(vec![None, Some(0x0F)]);
         let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
         assert_eq!(result.status, "warning");
-        assert!(result.message.contains("失联"));
-        assert!(result.message.contains("恢复到"));
+        assert!(result.message.contains("无信号"));
         assert_eq!(result.actual_input, Some(0x0F));
-        assert_eq!(*ops.writes.borrow(), vec![0x0F]);
+        // No rollback write — returned early from verification loop
+        assert!(ops.writes.borrow().is_empty());
     }
 
     #[test]
     fn verify_none_round0_no_previous_errors() {
-        let mut ops = MockDdc::new(vec![None]);
+        let mut ops = MockDdc::new(vec![None, None, None]);
         let result = verify_switch(0x11, None, &mut ops);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("失联"));
+        let err = result.unwrap_err();
+        assert!(err.contains("失联") || err.contains("恢复失败"));
     }
 
     #[test]
@@ -299,9 +318,9 @@ mod tests {
 
     #[test]
     fn verify_all_none_after_round0_not_confirmed() {
-        // Round 0: invalid, Round 1: None → not confirmed → triggers rollback
+        // Round 0: invalid, Round 1-2: None → not confirmed → triggers rollback
         // Rollback write 0x0F → read returns None (can't confirm)
-        let mut ops = MockDdc::new(vec![Some(0x00), None]);
+        let mut ops = MockDdc::new(vec![Some(0x00), None, None]);
         let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
         assert_eq!(result.status, "warning");
         assert!(result.message.contains("无法确认"));
@@ -313,27 +332,29 @@ mod tests {
 
     #[test]
     fn rollback_write_fails_returns_error() {
-        // Round 0: None → rollback → write fails → error
-        let mut ops = MockDdc::with_write_error(vec![None], "DDC write timeout");
+        // All rounds None → rollback → write fails → error
+        let mut ops = MockDdc::with_write_error(vec![None, None, None], "DDC write timeout");
         let result = verify_switch(0x11, Some(0x0F), &mut ops);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("失联"));
+        assert!(result.unwrap_err().contains("恢复失败"));
     }
 
     #[test]
-    fn rollback_write_ok_but_readback_different() {
-        // Round 0: None → rollback → write OK → read back 0x12 (unexpected)
+    fn verify_none_then_different_known_input() {
+        // Round 0: None → skip, Round 1: 0x12 (HDMI-2, != target) → warning
         let mut ops = MockDdc::new(vec![None, Some(0x12)]);
         let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
         assert_eq!(result.status, "warning");
         assert!(result.message.contains("HDMI-2"));
         assert_eq!(result.actual_input, Some(0x12));
+        // No rollback write — caught in verification loop
+        assert!(ops.writes.borrow().is_empty());
     }
 
     #[test]
     fn rollback_write_ok_but_readback_none() {
-        // Round 0: None → rollback → write OK → read None
-        let mut ops = MockDdc::new(vec![None, None]);
+        // All rounds None → rollback → write OK → read None
+        let mut ops = MockDdc::new(vec![None, None, None, None]);
         let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
         assert_eq!(result.status, "warning");
         assert!(result.message.contains("无法确认"));
@@ -344,9 +365,9 @@ mod tests {
 
     #[test]
     fn verify_multiple_invalid_values_all_skipped() {
-        // Both rounds return different invalid values → triggers rollback
+        // 3 rounds return different invalid values → triggers rollback
         // Rollback write 0x0F → read confirms 0x0F
-        let mut ops = MockDdc::new(vec![Some(0x63), Some(0xFE), Some(0x0F)]);
+        let mut ops = MockDdc::new(vec![Some(0x63), Some(0xFE), Some(0x00), Some(0x0F)]);
         let result = verify_switch(0x11, Some(0x0F), &mut ops).unwrap();
         assert_eq!(result.status, "warning");
         assert!(result.message.contains("恢复到"));

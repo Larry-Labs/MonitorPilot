@@ -241,13 +241,70 @@ fn parse_m1ddc_line(line: &str) -> Option<(u32, String)> {
 
 // --- Public API ---
 
+fn acquire_ddc_lock() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    super::DDC_LOCK.lock().map_err(|e| {
+        log::error!("DDC_LOCK 获取失败 (poison={})", e);
+        "DDC 内部错误，请重启应用".to_string()
+    })
+}
+
+fn build_monitor_info(
+    display_num: u32,
+    model: String,
+    current_input: Option<u8>,
+    ops: Option<&mut MacOsDdc>,
+) -> MonitorInfo {
+    let (brightness, contrast, volume, power_mode) = match ops {
+        Some(ops) => (
+            read_vcp_with_retry(ops, VCP_BRIGHTNESS).map(clamp_percent),
+            read_vcp_with_retry(ops, VCP_CONTRAST).map(clamp_percent),
+            read_vcp_with_retry(ops, VCP_VOLUME).map(clamp_percent),
+            read_vcp_with_retry(ops, VCP_POWER_MODE).map(|v| v as u8),
+        ),
+        None => (None, None, None, None),
+    };
+    MonitorInfo {
+        index: display_num as usize,
+        model,
+        current_input,
+        current_input_name: current_input
+            .map(input_name)
+            .unwrap_or_else(|| "未知".to_string()),
+        supported_inputs: supported_inputs_with_current(current_input),
+        brightness,
+        contrast,
+        volume,
+        power_mode,
+    }
+}
+
+// --- Public API ---
+
+/// 完整扫描：枚举显示器 + 读取所有 VCP 值（初始加载、手动刷新用）
 pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
-    let _guard = super::DDC_LOCK
-        .lock()
-        .map_err(|e| {
-            log::error!("DDC_LOCK 获取失败 (poison={})", e);
-            "DDC 内部错误，请重启应用".to_string()
-        })?;
+    enumerate_monitors(true)
+}
+
+/// 轻量枚举：枚举显示器 + 仅读 current_input，跳过 VCP（首次轮询用）
+pub fn get_monitors_light() -> Result<Vec<MonitorInfo>, String> {
+    enumerate_monitors(false)
+}
+
+/// 极速轮询：跳过 display list 枚举，仅读已知显示器的 current_input
+pub fn poll_inputs(known_monitors: &[(usize, String)]) -> Result<Vec<MonitorInfo>, String> {
+    let _guard = acquire_ddc_lock()?;
+    known_monitors
+        .iter()
+        .map(|(index, model)| {
+            let display_num = *index as u32;
+            let current_input = get_input(display_num);
+            Ok(build_monitor_info(display_num, model.clone(), current_input, None))
+        })
+        .collect()
+}
+
+fn enumerate_monitors(read_vcp: bool) -> Result<Vec<MonitorInfo>, String> {
+    let _guard = acquire_ddc_lock()?;
 
     let m1ddc = find_m1ddc();
     log::debug!("m1ddc 路径: {}", m1ddc);
@@ -290,19 +347,12 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
         );
 
         let mut ops = MacOsDdc { display_num };
-        monitors.push(MonitorInfo {
-            index: display_num as usize,
+        monitors.push(build_monitor_info(
+            display_num,
             model,
             current_input,
-            current_input_name: current_input
-                .map(input_name)
-                .unwrap_or_else(|| "未知".to_string()),
-            supported_inputs: supported_inputs_with_current(current_input),
-            brightness: read_vcp_with_retry(&mut ops, VCP_BRIGHTNESS).map(clamp_percent),
-            contrast: read_vcp_with_retry(&mut ops, VCP_CONTRAST).map(clamp_percent),
-            volume: read_vcp_with_retry(&mut ops, VCP_VOLUME).map(clamp_percent),
-            power_mode: read_vcp_with_retry(&mut ops, VCP_POWER_MODE).map(|v| v as u8),
-        });
+            if read_vcp { Some(&mut ops) } else { None },
+        ));
     }
 
     log::info!("共检测到 {} 台外接显示器", monitors.len());
@@ -310,12 +360,7 @@ pub fn get_monitors() -> Result<Vec<MonitorInfo>, String> {
 }
 
 pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResult, String> {
-    let _guard = super::DDC_LOCK
-        .lock()
-        .map_err(|e| {
-            log::error!("DDC_LOCK 获取失败 (poison={})", e);
-            "DDC 内部错误，请重启应用".to_string()
-        })?;
+    let _guard = acquire_ddc_lock()?;
 
     let display_num = monitor_index as u32;
     let mut ops = MacOsDdc { display_num };
@@ -342,12 +387,7 @@ pub fn switch_input(monitor_index: usize, input_value: u8) -> Result<SwitchResul
 }
 
 pub fn set_vcp(monitor_index: usize, code: u8, value: u16) -> Result<(), String> {
-    let _guard = super::DDC_LOCK
-        .lock()
-        .map_err(|e| {
-            log::error!("DDC_LOCK 获取失败 (poison={})", e);
-            "DDC 内部错误，请重启应用".to_string()
-        })?;
+    let _guard = acquire_ddc_lock()?;
 
     let mut ops = MacOsDdc {
         display_num: monitor_index as u32,

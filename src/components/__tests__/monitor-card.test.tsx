@@ -142,7 +142,7 @@ describe("MonitorCard", () => {
     expect(dp2Button).toBeDisabled();
   });
 
-  it("disables all buttons during switching including active", () => {
+  it("target button uses pointer-events-none instead of disabled during switching", () => {
     const optimisticMonitor = { ...mockMonitor, current_input: 0x11 };
     render(
       <MonitorCard
@@ -154,7 +154,8 @@ describe("MonitorCard", () => {
       />,
     );
     const activeButton = screen.getByRole("button", { name: /HDMI-1/ });
-    expect(activeButton).toBeDisabled();
+    expect(activeButton).not.toBeDisabled();
+    expect(activeButton.className).toContain("pointer-events-none");
   });
 
   it("shows loading state on switching target button", () => {

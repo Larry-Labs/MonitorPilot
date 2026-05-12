@@ -107,25 +107,20 @@ export const MonitorCard = memo(function MonitorCard({ monitor, switching, custo
             return (
               <div key={input.value} className="relative group">
                 <Button
-                  variant={isThisSwitching || (!isAnySwitching && isActive) ? "default" : "outline"}
+                  variant={!isAnySwitching && isActive ? "default" : "outline"}
                   size="sm"
                   aria-pressed={isActive}
                   aria-label={isActive ? `${displayName}（当前输入源）` : `切换到 ${displayName}`}
-                  className={`w-full text-xs h-10 transition-all duration-200 font-medium ${
+                  className={`w-full text-xs h-10 font-medium ${
                     isThisSwitching
-                      ? "shadow-md shadow-primary/20 animate-pulse"
-                      : isActive
-                        ? "shadow-md shadow-primary/20"
-                        : isAnySwitching
-                          ? ""
+                      ? "!border-primary !text-primary shadow-md shadow-primary/20 pointer-events-none transition-none"
+                      : isAnySwitching
+                        ? "opacity-35 grayscale pointer-events-none transition-none"
+                        : isActive
+                          ? "shadow-md shadow-primary/20"
                           : "hover:border-primary/40 hover:bg-primary/5 hover:text-primary dark:hover:bg-primary/10"
                   }`}
-                  style={
-                    isAnySwitching && !isThisSwitching
-                      ? { opacity: 0.35, pointerEvents: "none" as const, filter: "grayscale(100%)", transition: "none", background: "transparent", color: "inherit" }
-                      : undefined
-                  }
-                  disabled={isAnySwitching}
+                  disabled={isAnySwitching && !isThisSwitching}
                   onClick={() => {
                     if (!isActive) {
                       onSwitch(monitor.index, input.value);

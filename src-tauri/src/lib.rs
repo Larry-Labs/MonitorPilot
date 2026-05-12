@@ -5,6 +5,8 @@ mod tray;
 
 use config::{AppConfig, ConfigManager, InputPreset};
 use monitor::{get_monitors, switch_input, set_vcp, MonitorInfo, SwitchResult, VCP_BRIGHTNESS, VCP_CONTRAST, VCP_VOLUME, VCP_POWER_MODE};
+#[cfg(target_os = "macos")]
+use monitor::{get_monitors_light, poll_inputs};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::Manager;
@@ -15,18 +17,30 @@ struct MonitorListResult {
     error: Option<String>,
 }
 
+impl MonitorListResult {
+    fn from(result: Result<Vec<MonitorInfo>, String>) -> Self {
+        match result {
+            Ok(monitors) => Self { monitors, error: None },
+            Err(e) => Self { monitors: vec![], error: Some(e) },
+        }
+    }
+}
+
 #[tauri::command]
 fn cmd_get_monitors() -> MonitorListResult {
-    match get_monitors() {
-        Ok(monitors) => MonitorListResult {
-            monitors,
-            error: None,
-        },
-        Err(e) => MonitorListResult {
-            monitors: vec![],
-            error: Some(e),
-        },
-    }
+    MonitorListResult::from(get_monitors())
+}
+
+#[tauri::command]
+fn cmd_poll_monitors(known: Option<Vec<(usize, String)>>) -> MonitorListResult {
+    #[cfg(target_os = "macos")]
+    let result = match known {
+        Some(ref monitors) => poll_inputs(monitors),
+        None => get_monitors_light(),
+    };
+    #[cfg(not(target_os = "macos"))]
+    let result = get_monitors();
+    MonitorListResult::from(result)
 }
 
 #[tauri::command]
@@ -191,6 +205,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             cmd_get_monitors,
+            cmd_poll_monitors,
             cmd_switch_input,
             cmd_set_brightness,
             cmd_set_contrast,

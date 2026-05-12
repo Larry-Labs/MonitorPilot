@@ -1,6 +1,6 @@
 [package]
 name = "monitor-pilot"
-version = "0.1.0"
+version = "0.2.6"
 description = "DDC/CI Monitor Input Source Switcher"
 authors = ["Larry Gao"]
 license = "MIT"

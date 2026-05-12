@@ -91,7 +91,10 @@ function App() {
     isPolling.current = true;
     const gen = pollGeneration.current;
     try {
-      const result = await invoke<MonitorListResult>("cmd_get_monitors");
+      const known = monitorsSnapshotRef.current.length > 0
+        ? monitorsSnapshotRef.current.map(m => [m.index, m.model] as [number, string])
+        : undefined;
+      const result = await invoke<MonitorListResult>("cmd_poll_monitors", { known });
       if (gen !== pollGeneration.current) return;
 
       if (result.monitors.length === 0 && lastMonitorCount.current > 0) {
@@ -104,19 +107,31 @@ function App() {
         emptyPollCount.current = 0;
       }
 
-      const newJson = JSON.stringify(result.monitors);
-      if (newJson !== monitorsJsonRef.current) {
+      // 先合并轮询结果与上一次状态（轻量轮询不读 VCP，需保留旧值）
+      const prevMonitors = monitorsSnapshotRef.current;
+      const merged = result.monitors.map(newM => {
+        const oldM = prevMonitors.find(m => m.index === newM.index);
+        if (oldM) {
+          return {
+            ...newM,
+            current_input: newM.current_input ?? oldM.current_input,
+            current_input_name: newM.current_input != null ? newM.current_input_name : oldM.current_input_name,
+            brightness: newM.brightness ?? oldM.brightness,
+            contrast: newM.contrast ?? oldM.contrast,
+            volume: newM.volume ?? oldM.volume,
+            power_mode: newM.power_mode ?? oldM.power_mode,
+          };
+        }
+        return newM;
+      });
+
+      // 用合并后的结果比较，避免因 VCP null 导致每次都触发更新
+      const mergedJson = JSON.stringify(merged);
+      if (mergedJson !== monitorsJsonRef.current) {
         if (!switchingRef.current) {
-          setMonitors(prev => {
-            const merged = result.monitors.map(newM => {
-              const oldM = prev.find(m => m.index === newM.index);
-              if (newM.current_input == null && oldM?.current_input != null) {
-                return { ...newM, current_input: oldM.current_input, current_input_name: oldM.current_input_name };
-              }
-              return newM;
-            });
+          setMonitors(() => {
             monitorsSnapshotRef.current = merged;
-            monitorsJsonRef.current = JSON.stringify(merged);
+            monitorsJsonRef.current = mergedJson;
             return merged;
           });
         }
@@ -182,7 +197,7 @@ function App() {
   }, [refreshMonitors, silentRefresh]);
 
   useEffect(() => {
-    const POLL_INTERVAL = 3000;
+    const POLL_INTERVAL = 5000;
     let timer: ReturnType<typeof setInterval>;
 
     const startPolling = () => {
@@ -219,32 +234,22 @@ function App() {
     pollGeneration.current += 1;
     switchingRef.current = key;
 
-    const previousMonitors = monitorsSnapshotRef.current;
     setSwitching(key);
-    setMonitors(prev =>
-      prev.map(m => {
-        if (m.index !== monitorIndex) return m;
-        const targetInput = m.supported_inputs.find(i => i.value === inputValue);
-        return {
-          ...m,
-          current_input: inputValue,
-          current_input_name: targetInput?.name ?? m.current_input_name,
-        };
-      })
-    );
     monitorsJsonRef.current = "";
-    showToast({ type: "switching", message: "正在切换输入源..." });
+    showToast({ type: "switching", message: "正在切换输入源..." }, 30000);
     await new Promise(r => setTimeout(r, 50));
     const switchStart = Date.now();
-    let pendingRestore: (() => void) | null = null;
+    let resultToast: { state: NonNullable<ToastState>; duration: number } | null = null;
     try {
       const result = await invoke<SwitchResult>("cmd_switch_input", { monitorIndex, inputValue });
       if (!mountedRef.current) return;
 
       if (result.status === "warning") {
-        // Defer state restoration until MIN_VISUAL_MS to avoid jarring flash-back
-        pendingRestore = () => {
-          if (result.actual_input != null) {
+        // Only update current_input if actual_input is a valid known input
+        if (result.actual_input != null) {
+          const monitor = monitorsSnapshotRef.current.find(m => m.index === monitorIndex);
+          const isKnownInput = monitor?.supported_inputs.some(i => i.value === result.actual_input);
+          if (isKnownInput) {
             setMonitors(prev => {
               const restored = prev.map(m =>
                 m.index === monitorIndex
@@ -255,38 +260,46 @@ function App() {
               monitorsJsonRef.current = JSON.stringify(restored);
               return restored;
             });
-          } else {
-            setMonitors(previousMonitors);
-            monitorsSnapshotRef.current = previousMonitors;
-            monitorsJsonRef.current = JSON.stringify(previousMonitors);
           }
-          revertCooldownUntil.current = Date.now() + 8000;
-          showToast({ type: "warning", message: result.message }, TOAST_LONG_MS);
-        };
+        }
+        revertCooldownUntil.current = Date.now() + 8000;
+        resultToast = { state: { type: "warning", message: result.message }, duration: TOAST_LONG_MS };
       } else {
-        monitorsJsonRef.current = "";
+        // Backend has confirmed the switch — update UI to the verified value
+        const confirmedInput = result.actual_input ?? inputValue;
+        setMonitors(prev => {
+          const updated = prev.map(m => {
+            if (m.index !== monitorIndex) return m;
+            const targetInput = m.supported_inputs.find(i => i.value === confirmedInput);
+            return {
+              ...m,
+              current_input: confirmedInput,
+              current_input_name: targetInput?.name ?? m.current_input_name,
+            };
+          });
+          monitorsSnapshotRef.current = updated;
+          monitorsJsonRef.current = JSON.stringify(updated);
+          return updated;
+        });
         revertCooldownUntil.current = Date.now() + 5000;
-        showToast({ type: "success", message: result.message }, TOAST_SHORT_MS);
+        resultToast = { state: { type: "success", message: result.message }, duration: TOAST_SHORT_MS };
       }
     } catch (e) {
       if (!mountedRef.current) return;
-      pendingRestore = () => {
-        setMonitors(previousMonitors);
-        monitorsSnapshotRef.current = previousMonitors;
-        monitorsJsonRef.current = JSON.stringify(previousMonitors);
-        revertCooldownUntil.current = Date.now() + 8000;
-        showToast({ type: "error", message: String(e) }, TOAST_LONG_MS);
-      };
+      revertCooldownUntil.current = Date.now() + 8000;
+      resultToast = { state: { type: "error", message: String(e) }, duration: TOAST_LONG_MS };
     } finally {
       const elapsed = Date.now() - switchStart;
-      const MIN_VISUAL_MS = 1500;
+      const MIN_VISUAL_MS = 6000;
       if (elapsed < MIN_VISUAL_MS) {
         await new Promise(r => setTimeout(r, MIN_VISUAL_MS - elapsed));
       }
-      if (pendingRestore && mountedRef.current) pendingRestore();
       switchLock.current = false;
       switchingRef.current = null;
-      if (mountedRef.current) setSwitching(null);
+      if (mountedRef.current) {
+        setSwitching(null);
+        if (resultToast) showToast(resultToast.state, resultToast.duration);
+      }
     }
   }, [showToast]);
 
